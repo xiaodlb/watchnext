@@ -8,7 +8,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { expect, it } from "vitest";
 import { createMockService, pendingDomains } from "../../frontend/mock/service";
 
-const doc = readFileSync("_docs/mock-integration.md", "utf8"), inventory = readFileSync("_docs/operation-inventory.md", "utf8");
+const normalizeLines = (text: string) => text.replace(/\r\n/g, "\n");
+const doc = normalizeLines(readFileSync("_docs/mock-integration.md", "utf8")), inventory = normalizeLines(readFileSync("_docs/operation-inventory.md", "utf8"));
 const section = (text: string, heading: string) => { const start = text.indexOf(`\n${heading}\n`); if (start < 0) throw Error(`Missing section ${heading}`); const rest = text.slice(start + heading.length + 2); const end = rest.search(/\n#{2,3} /); return end < 0 ? rest : rest.slice(0, end); };
 const domainIds = [...inventory.matchAll(/^\| ([AGLWMPK]\d\d) /gm)].map(m => m[1]);
 const uIds = [...inventory.matchAll(/^- \*\*(U0\d) /gm)].map(m => m[1]);
