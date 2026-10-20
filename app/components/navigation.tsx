@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const destinations = [
+export const destinations = [
   { href: "/", label: "Group entry" },
   { href: "/watchlist", label: "Watchlist" },
   { href: "/pick", label: "Pick for me" },
@@ -35,4 +35,29 @@ export function Navigation() {
       </ul>
     </nav>
   );
+}
+
+/**
+ * The compact navigation deliberately contains only the three primary flows
+ * from the Lovable reference. Account, archive and legacy controls remain in
+ * the desktop header and linked from their owning pages.
+ */
+export function MobileNavigation() {
+  const pathname = usePathname();
+  if (pathname === "/mock" || pathname.startsWith("/mock/")) return null;
+  const mobile = destinations.filter(({ href }) => ["/watchlist", "/pick"].includes(href));
+  const links = [
+    mobile[0],
+    { href: "/watchlist/add", label: "Add" },
+    mobile[1],
+  ];
+  return <nav className="mobile-navigation" aria-label="Main navigation mobile">
+    {links.map(({ href, label }) => {
+      const active = href === "/watchlist/add" ? pathname.startsWith(href) : pathname === href || pathname.startsWith(href + "/");
+      return <Link key={href} href={href} className="mobile-navigation-link" aria-current={active ? "page" : undefined}>
+        <span aria-hidden="true" className={`mobile-nav-icon mobile-nav-${label.toLowerCase().replaceAll(" ", "-")}`} />
+        {label}
+      </Link>;
+    })}
+  </nav>;
 }

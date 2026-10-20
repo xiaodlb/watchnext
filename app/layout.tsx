@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Navigation } from "./components/navigation";
+import { MobileNavigation, Navigation } from "./components/navigation";
 import "./styles.css";
 
 export const metadata: Metadata = {
@@ -29,6 +29,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <main id="main-content" className="shell main-content" tabIndex={-1}>
           {children}
         </main>
+        <MobileNavigation />
         <footer className="shell site-footer">Something worth watching. Someone to watch it with.</footer>
       </body>
     </html>
