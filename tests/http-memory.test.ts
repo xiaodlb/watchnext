@@ -26,6 +26,13 @@ it("loses accounts, sessions and groups when its owned process-memory repository
  resetHttpMemoryForTests();const after=await handleMemory(request("context",undefined,session,"GET"),["context"]);expect((await after.json()).account).toBeNull();
 });
 
+it("rejects non-JSON mutations and consumes a recovery proof at most once under a race",async()=>{
+ process.env.WATCHNEXT_HTTP_MEMORY="1";const registered=await handleMemory(request("auth/register",{username:"Race.User",password,confirmation:password}),["auth","register"]),value=await registered.json();
+ const payload={username:"Race.User",password:"Replacement race password",confirmation:"Replacement race password",proof:value.recoveryCode};
+ const [one,two]=await Promise.all([handleMemory(request("auth/recovery",payload),["auth","recovery"]),handleMemory(request("auth/recovery",payload),["auth","recovery"])]);expect([one.status,two.status].sort()).toEqual([200,422]);
+ const bad=new Request(`${origin}/v1/auth/logout`,{method:"POST",headers:{origin}});expect((await handleMemory(bad,["auth","logout"])).status).toBe(422);
+});
+
 it("exercises every remaining declared identity/group/legacy operation and keeps memory mode free of SQLite",async()=>{
  process.env.WATCHNEXT_HTTP_MEMORY="1";
  const register=await handleMemory(request("auth/register",{username:"Complete.Owner",password,confirmation:password}),["auth","register"]),first=cookieOf(register,"watchnext_account_session"),registered=await register.json();
