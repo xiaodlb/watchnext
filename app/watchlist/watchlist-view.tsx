@@ -9,12 +9,13 @@ import { Cover } from "./cover";
 import { ContributionControls } from "./contribution-controls";
 import type { ContributionState } from "../../lib/contribution-state";
 
-export function WatchlistContent({ view, archived = false, contributionAction }: { view: WatchlistView; archived?: boolean; contributionAction?: (id: string, previous: ContributionState, form: FormData) => Promise<ContributionState> }) {
+export function WatchlistContent({ view, groupName, archived = false, contributionAction }: { view: WatchlistView; groupName?: string; archived?: boolean; contributionAction?: (id: string, previous: ContributionState, form: FormData) => Promise<ContributionState> }) {
   const selected = Boolean(view.activeMemberId);
   const [type, setType] = useState<"all" | "movie" | "series" | "anime" | "youtube">("all");
   const visibleItems = useMemo(() => type === "all" ? view.items : view.items.filter((item) => item.contentType === type), [type, view.items]);
   const types = [{ value: "all", label: "All" }, { value: "movie", label: "Movies" }, { value: "series", label: "Series" }, { value: "anime", label: "Anime" }, { value: "youtube", label: "YouTube" }] as const;
-  return <div className="page-content watchlist-page"><div className="page-heading"><p className="eyebrow">Shared list</p><h1>{archived ? "Archive" : "Your watchlist"}</h1><p className="page-introduction">{archived ? "Saved history, ready whenever your group wants to return." : "All the things your group has been meaning to watch."}</p>
+  const countLabel = `${view.items.length} ${view.items.length === 1 ? "title" : "titles"}`;
+  return <div className="page-content watchlist-page"><div className="page-heading"><p className="eyebrow">{archived ? "Shared history" : "Shared watchlist"}</p><h1>{archived ? "Archive" : groupName ?? "Your watchlist"}</h1><p className="page-introduction">{archived ? "Saved history, ready whenever your group wants to return." : `Everything your group wants to watch · ${countLabel}`}</p>
     {archived ? <><p>{selected ? "Restore a title to add your name and bring it back to the watchlist." : "Choose a profile before restoring a title."}</p>{!selected && <Link className="button" href="/group">Choose profile</Link>}</> : selected ? <Link className="button" href="/watchlist/add">Add title</Link> : <><p>Choose a profile before adding a title.</p><Link className="button" href="/group">Choose profile</Link></>}
   </div>
   {!archived&&view.canFilter&&<nav className="watchlist-filters" aria-label="Watchlist filter"><a className="button button-secondary" href="/watchlist" aria-label="All titles" aria-current={view.filter!=="mine"?"page":undefined}>All</a><a className="button button-secondary" href="/watchlist?filter=mine" aria-current={view.filter==="mine"?"page":undefined}>Added by me</a></nav>}

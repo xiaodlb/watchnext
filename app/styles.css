@@ -163,9 +163,14 @@ body { min-height: 100vh; background: #f7f8fc; }
 .site-header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--color-surface) 96%, transparent); backdrop-filter: blur(12px); }
 .shell { width: min(var(--content-width), calc(100% - 3rem)); }
 .header-content { min-height: 4.5rem; padding-block: .75rem; gap: 1rem; }
-.brand { font-size: 1.25rem; }
+.brand { color: var(--color-text); font-size: 1.25rem; text-decoration: none; }
 .brand-mark { width: 2rem; height: 2rem; border-radius: .5rem; box-shadow: 0 4px 10px #1d4ed833; }
-.navigation { margin-left: auto; }
+.context-badge { display: inline-flex; max-width: min(20rem, 28vw); align-items: center; gap: .35rem; overflow: hidden; padding: .35rem .7rem; border-radius: 999px; background: var(--color-background); color: var(--color-muted); font-size: .82rem; line-height: 1.2; white-space: nowrap; }
+.context-badge-group { overflow: hidden; color: var(--color-text); font-weight: 700; text-overflow: ellipsis; }
+.site-header nav[aria-label="Main navigation"] { display: flex; align-items: center; gap: .25rem; margin-left: auto; }
+.navigation { margin-left: 0; }
+.navigation-secondary { padding-left: .25rem; border-left: 1px solid var(--color-border); }
+.navigation-secondary .navigation-link { min-width: auto; padding-inline: .55rem; font-size: .82rem; }
 .navigation-link { min-height: 2.75rem; border-radius: .5rem; }
 .main-content { min-height: calc(100svh - 9rem); padding-block: clamp(1.5rem, 4vw, 2.5rem); }
 .page-content { max-width: none; }
@@ -198,22 +203,14 @@ body { min-height: 100vh; background: #f7f8fc; }
 .auth-links, .auth-footer { margin: 1.25rem 0 0; color: var(--color-muted); font-size: .9rem; text-align: center; }
 body:has(.auth-page) .site-header, body:has(.auth-page) .site-footer { display: none; }
 body:has(.auth-page) .main-content { width: 100%; min-height: 100svh; padding: 0; }
-/* The reference cards sit 24px below the 375px viewport centre. Keeping this
-   explicit avoids the browser's grid free-space rounding moving the form. */
-.auth-page { transform: translateY(23px); }
-.auth-brand { transform: translateY(13px); }
-.auth-tagline { transform: translateY(3px); }
 body:has(.auth-page) .mobile-navigation { display: none; }
 body:has(.auth-page) { padding-bottom: 0; }
-@media (min-width: 48rem) {
-  .auth-page { transform: translateY(22px); }
-  .auth-tagline { transform: translateY(5px); }
-}
 
 /* Shared library layout copied from the reference's grid and chips, while
    still rendering only titles that the server authorized. */
 .watchlist-page .page-heading { position: relative; padding-right: 9rem; }
 .watchlist-page .page-heading > .button { position: absolute; right: 0; top: .5rem; }
+.watchlist-page .page-heading h1 { max-width: 38rem; }
 .watchlist-filters { gap: .5rem; margin: 0 0 1rem; }
 .watchlist-filters .button { min-height: 2.25rem; padding: .375rem .75rem; border-radius: 999px; font-size: .875rem; }
 .type-chips { display: flex; flex-wrap: wrap; gap: .5rem; margin: 1rem 0 .75rem; }
@@ -269,6 +266,7 @@ body:has(.auth-page) { padding-bottom: 0; }
 .picker-page > .group-result { margin-top: 1.5rem; }
 
 .mobile-navigation { display: none; }
+.mobile-utility-navigation { display: none; }
 @media (min-width: 48rem) {
   .watchlist-items { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -283,6 +281,10 @@ body:has(.auth-page) { padding-bottom: 0; }
   .site-header { position: static; }
   .header-content { min-height: 4rem; }
   .navigation { display: none; }
+  .context-badge { display: none; }
+  .mobile-utility-navigation { display: flex; gap: .25rem; overflow-x: auto; padding: .4rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
+  .mobile-utility-navigation a { display: inline-flex; min-height: 2.25rem; align-items: center; padding-inline: .55rem; border-radius: .45rem; color: var(--color-muted); font-size: .78rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+  .mobile-utility-navigation a[aria-current="page"] { background: var(--color-accent-soft); color: var(--color-accent); }
   .main-content { padding-top: 1.5rem; }
   .site-footer { display: none; }
   .mobile-navigation { position: fixed; z-index: 30; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(3, 1fr); padding-bottom: env(safe-area-inset-bottom); border-top: 1px solid var(--color-border); background: color-mix(in srgb, var(--color-surface) 96%, transparent); backdrop-filter: blur(12px); box-shadow: 0 -5px 18px #17233b0c; }
@@ -294,8 +296,9 @@ body:has(.auth-page) { padding-bottom: 0; }
   .watchlist-page .page-heading { padding-right: 0; }
   .watchlist-page .page-heading > .button { position: static; margin-top: 1rem; }
   .watchlist-items { gap: .75rem; }
-  .watchlist-card { grid-template-columns: 5.25rem minmax(0, 1fr); gap: .75rem; }
-  .watchlist-card .title-cover { min-height: 7.85rem; }
+  .watchlist-card { display: flex; flex-direction: column; gap: .65rem; }
+  .watchlist-card .title-cover { min-height: 0; aspect-ratio: 2 / 3; }
+  .watchlist-card .title-cover.video-cover { aspect-ratio: 16 / 9; }
   .watchlist-metadata h2 { font-size: .98rem; }
   .watchlist-metadata p:nth-of-type(n+4) { display: none; }
   .detail-metadata { grid-template-columns: 1fr; gap: 1.25rem; }

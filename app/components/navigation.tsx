@@ -4,12 +4,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export const destinations = [
-  { href: "/", label: "Group entry" },
   { href: "/watchlist", label: "Watchlist" },
+  { href: "/watchlist/add", label: "Add" },
   { href: "/pick", label: "Pick for me" },
-  { href: "/archive", label: "Archive" },
-  { href: "/account", label: "Account groups" },
 ];
+
+const secondaryDestinations = [
+  { href: "/group", label: "Group" },
+  { href: "/archive", label: "Archive" },
+  { href: "/account", label: "Account" },
+];
+
+function activeDestination(pathname: string, href: string) {
+  if (href === "/watchlist") return pathname === href || (pathname.startsWith("/watchlist/") && !pathname.startsWith("/watchlist/add"));
+  return pathname === href || pathname.startsWith(href + "/");
+}
 
 export function Navigation() {
   const pathname = usePathname();
@@ -21,9 +30,9 @@ export function Navigation() {
   );
   return (
     <nav aria-label="Main navigation">
-      <ul className="navigation">
+      <ul className="navigation navigation-primary">
         {destinations.map(({ href, label }) => {
-          const active = pathname === href || (href === "/" && pathname === "/group") || (href !== "/" && pathname.startsWith(href + "/"));
+          const active = activeDestination(pathname, href);
           return (
             <li key={href}>
               <Link className="navigation-link" href={href} aria-current={active ? "page" : undefined}>
@@ -32,6 +41,9 @@ export function Navigation() {
             </li>
           );
         })}
+      </ul>
+      <ul className="navigation navigation-secondary" aria-label="Other destinations">
+        {secondaryDestinations.map(({ href, label }) => <li key={href}><Link className="navigation-link" href={href} aria-current={activeDestination(pathname, href) ? "page" : undefined}>{label}</Link></li>)}
       </ul>
     </nav>
   );
@@ -45,11 +57,10 @@ export function Navigation() {
 export function MobileNavigation() {
   const pathname = usePathname();
   if (pathname === "/mock" || pathname.startsWith("/mock/")) return null;
-  const mobile = destinations.filter(({ href }) => ["/watchlist", "/pick"].includes(href));
   const links = [
-    mobile[0],
+    destinations[0],
     { href: "/watchlist/add", label: "Add" },
-    mobile[1],
+    destinations[2],
   ];
   return <nav className="mobile-navigation" aria-label="Main navigation mobile">
     {links.map(({ href, label }) => {
@@ -59,5 +70,13 @@ export function MobileNavigation() {
         {label}
       </Link>;
     })}
+  </nav>;
+}
+
+export function MobileUtilityNavigation() {
+  const pathname = usePathname();
+  if (pathname === "/mock" || pathname.startsWith("/mock/")) return null;
+  return <nav className="mobile-utility-navigation" aria-label="Other destinations">
+    {secondaryDestinations.map(({ href, label }) => <Link key={href} href={href} aria-current={activeDestination(pathname, href) ? "page" : undefined}>{label}</Link>)}
   </nav>;
 }

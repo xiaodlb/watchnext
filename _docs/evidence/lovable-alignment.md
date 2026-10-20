@@ -8,9 +8,9 @@
 
 ## Capture method
 
-All local captures use the normal production-built Next application at an owned loopback origin. The protected states are created through the repository's existing isolated `prepareDemo` fixture and then reached through normal invite, group, profile and route actions. The data is synthetic and the fixture's database is outside the repository and normal user database; invite secrets are not saved in this repository or shown in images. Candidate lookup uses the repository's existing test-only provider transport, not a live provider or a copied reference store.
+All local captures use the normal production-built Next application at an owned loopback origin. The refreshed library/Add captures were made with a disposable fixture: a synthetic group and profile were created through normal invite and group actions, then a manual title was saved through the normal Add form. The data is synthetic and the fixture database is outside the repository and normal user database; invite secrets are not saved in this repository or shown in images. Candidate lookup uses the repository's existing test-only provider transport, not a live provider or a copied reference store.
 
-The screenshots use Chromium at the fixed 1280 × 900 and 375 × 812 viewports. Full-page capture is used for every state. The recorded source screenshots are in `_docs/references/lovable-2026-10-19/`; that source pack contains sign-in at both widths and post-login library/Add/picker at desktop only. It does **not** contain post-login mobile, search, or detail captures, so those states have inspected-source and local functional evidence rather than a fabricated claimed source pixel pair.
+The screenshots use Chromium at the fixed 1280 × 900 and 375 × 812 viewports. Full-page capture is used for every state. The refreshed `protected/library-*` and `protected/add-*` images were checked after the final header/card changes; both widths had no horizontal overflow and a visible keyboard focus outline on the Add link. The recorded source screenshots are in `_docs/references/lovable-2026-10-19/`; that source pack contains sign-in at both widths and post-login library/Add/picker at desktop only. It does **not** contain post-login mobile, search, or detail captures, so those states have inspected-source and local functional evidence rather than a fabricated claimed source pixel pair.
 
 ## Captured route/state pairs
 
@@ -24,22 +24,19 @@ The screenshots use Chromium at the fixed 1280 × 900 and 375 × 812 viewports. 
 | Picker result | `protected/picker-result-desktop.png` | `protected/picker-result-mobile.png` | Normal picker result after Pick action |
 | Title detail | `protected/detail-desktop.png` | `protected/detail-mobile.png` | Normal title detail route for fixture content |
 
-## Sign-in comparison and tolerance
+## Visual review
 
-`sign-in-desktop-overlay.png` and `sign-in-mobile-overlay.png` overlay the pinned-source capture and local capture at 50% opacity. They were inspected together with the originals. The fixed geometry acceptance threshold is **2 CSS pixels** for the matched card region; it is set before the final comparison. The local card bounds come from Chromium's DOM layout inspection and source bounds from the recorded pinned reference screenshot:
+The reference provides direction for a **Lovable-like appearance**, not a pixel-perfect reproduction. The source and local captures were reviewed at 1280 × 900 and 375 × 812 for the shared light palette, centred authentication surface, bounded forms, compact header, card grid, rounded controls and the signed-in mobile bottom navigation. The screenshot files listed above are retained as the review record.
 
-| Viewport | Reference card (x, y, width, height) | Local card | Largest absolute difference | Result |
-| --- | --- | --- | --- | --- |
-| 1280 × 900 | 416, 300, 448, 390 | 416, 299.734, 448, 389.609 | 0.391px | Pass |
-| 375 × 812 | 16, 268, 343, 393 | 16, 267.344, 343, 394 | 1px | Pass |
+The final review deliberately does not use overlays, pixel-difference percentages or CSS-pixel thresholds. WatchNext has real identity, group, recovery, access-error and provider-safe states that are absent from the prototype, so a numerical image-match claim would be misleading. The review instead checks that these real states use the same visual language and remain understandable.
 
-The card-boundary pixel tolerance is a maximum one-pixel edge displacement (under the required two-pixel geometry limit). A whole-page 1% content diff is deliberately not claimed: the real app has required account/recovery/discovery copy and the prototype has different static form copy and a Lovable badge. Those narrow dynamic text regions are visible in the overlay; no card, field, navigation, or layout region is masked. The visible geometry and color/focus treatment, rather than an invalid whole-page semantic diff, are the comparison evidence.
-
-The mobile capture also verifies that signed-out pages do not show the signed-in fixed bottom navigation. Protected captures verify the desktop sticky navigation and the signed-in 375px bottom Watchlist/Add/Pick navigation without overlap.
+The mobile capture verifies that signed-out pages do not show signed-in navigation. Protected captures verify that the primary Watchlist/Add/Pick routes fit above the bottom bar and that Group, Archive and Account stay reachable through the compact utility links.
 
 ## Functional and accessibility inspection
 
 - `/watchlist` type chips filter only the already-authorized rendered list; the server query and picker preferences are unchanged.
+- The desktop header gives Watchlist, Add and Pick for me the primary hierarchy, shows the actual active group/person when one is available, and keeps Group, Archive and Account as secondary destinations. On small screens the same secondary destinations appear in the utility row above the fixed primary navigation.
+- The library uses the actual group name and current title total in its heading, with separate All / Added by me controls and the existing truthful card metadata, covers and contributors.
 - The fixture journey used actual group/profile route actions and real protected routes; Add/search, picker and title detail are not fabricated screenshots.
 - At both target widths, the main controls remain visible, labelled and keyboard-focusable; the responsive views have no horizontal overflow and preserve the existing skip-link/focus styles.
 - The actual visual differences are limited to truthful application content absent from the prototype: real account/recovery/discovery links, actual selected group/person/title text, and real safety/error/empty states. They are not presented as source-identical content.
