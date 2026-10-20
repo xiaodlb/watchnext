@@ -51,4 +51,3 @@ The mobile capture also verifies that signed-out pages do not show the signed-in
 - `pnpm test` — passed: 106 files, 1091 tests. The isolated-fixture audit race repair is covered by the normal suite.
 
 The visual evidence is implementation proof for independent QA, not a substitute for its verdict. No normal user server, data, credentials, or provider secret was changed.
-
