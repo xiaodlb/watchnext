@@ -1,31 +1,54 @@
 # Lovable alignment evidence — issue #63
 
-## Reference and scope
+## Reference and delivery boundary
 
-- Reference source: `M:/webf2/WatchNextAgent/frontend-reference`, commit `1e4afe7edfeccc4b56dc56f192a0b8d9ca937edb`.
-- Local implementation: `codex/lovable-alignment` (commit recorded with the implementation).
-- No reference store, router, error reporting, analytics, fixture account data, recovery code, or media files were copied. The local Next routes retain their real account, group, metadata, picker and SQLite-facing behavior.
+- Reference source: `M:/webf2/WatchNextAgent/frontend-reference`, pinned at `1e4afe7edfeccc4b56dc56f192a0b8d9ca937edb`.
+- Local delivery branch: `codex/lovable-alignment`; the implementation begins at `b47c12f` and the QA repair is recorded by the follow-up commit.
+- The reference was used for presentation only. The local app retains its Next routes, real identity/group/data behavior, SQLite-facing implementation, provider safety checks and account recovery. No reference store, router, telemetry, fixture credentials, recovery code, or media assets were copied.
 
-## Recorded local captures
+## Capture method
 
-These captures use the normal Next app on an owned loopback development server and no entered credentials. The active normal database did not have a selected group, so protected `/watchlist` renders its honest access-error state rather than fabricated sample cards.
+All local captures use the normal production-built Next application at an owned loopback origin. The protected states are created through the repository's existing isolated `prepareDemo` fixture and then reached through normal invite, group, profile and route actions. The data is synthetic and the fixture's database is outside the repository and normal user database; invite secrets are not saved in this repository or shown in images. Candidate lookup uses the repository's existing test-only provider transport, not a live provider or a copied reference store.
 
-| Local route / state | 1280 × 900 | 375 × 812 | Result |
+The screenshots use Chromium at the fixed 1280 × 900 and 375 × 812 viewports. Full-page capture is used for every state. The recorded source screenshots are in `_docs/references/lovable-2026-10-19/`; that source pack contains sign-in at both widths and post-login library/Add/picker at desktop only. It does **not** contain post-login mobile, search, or detail captures, so those states have inspected-source and local functional evidence rather than a fabricated claimed source pixel pair.
+
+## Captured route/state pairs
+
+| State | 1280 × 900 | 375 × 812 | How it was reached |
 | --- | --- | --- | --- |
-| `/` — signed-out, empty fields | `sign-in-desktop.png` | `sign-in-mobile.png` | The source light palette, centered 448px form, tabs, fields and primary action are present. The local security links and legacy-group discovery remain visible. |
-| `/watchlist` — no current group | `watchlist-desktop.png` | `watchlist-mobile.png` | The real access error uses the shared shell and responsive navigation; it does not substitute source fixture titles. |
+| Signed-out sign-in | `sign-in-desktop.png` | `sign-in-mobile.png` | Normal `/` entry, empty fields |
+| Authorized library | `protected/library-desktop.png` | `protected/library-mobile.png` | Real fixture invite, selected Anna profile, `/watchlist` |
+| Add form | `protected/add-desktop.png` | `protected/add-mobile.png` | Normal Add navigation |
+| Candidate search | `protected/search-desktop.png` | `protected/search-mobile.png` | Real query/lookup and search-result route |
+| Picker inputs | `protected/picker-input-desktop.png` | `protected/picker-input-mobile.png` | Normal picker with real fixture viewer/time/mood selection |
+| Picker result | `protected/picker-result-desktop.png` | `protected/picker-result-mobile.png` | Normal picker result after Pick action |
+| Title detail | `protected/detail-desktop.png` | `protected/detail-mobile.png` | Normal title detail route for fixture content |
 
-The source screenshots available before this issue are retained under `_docs/references/lovable-2026-10-19/`: `sign-in-desktop.png`, `sign-in-mobile.png`, `watchlist-desktop.png`, `add-desktop.png` and `picker-desktop.png`.
+## Sign-in comparison and tolerance
 
-## Visual comparison notes
+`sign-in-desktop-overlay.png` and `sign-in-mobile-overlay.png` overlay the pinned-source capture and local capture at 50% opacity. They were inspected together with the originals. The fixed geometry acceptance threshold is **2 CSS pixels** for the matched card region; it is set before the final comparison. The local card bounds come from Chromium's DOM layout inspection and source bounds from the recorded pinned reference screenshot:
 
-- Shared foundation values are derived from `src/styles.css` and `src/components/ui-kit.tsx` in the pinned source: system sans, pale blue-gray background, navy foreground, `#1d4ed8` primary, 8px controls, 16px surfaces, 1152px shell, 768px mobile switch, desktop sticky header and fixed mobile Watchlist/Add/Pick navigation.
-- The local authentication form intentionally keeps real password/recovery semantics and hints. The reference prototype's arbitrary-password text and static recovery behavior are not copied.
-- Library, Add/search, picker and detail views use the same shared tokens, cover fallback, responsive grids/columns and card controls. A real selected account/group or the documented owned demo is required to capture those protected routes without inventing data.
-- The captures are reviewed UI evidence, not a claim of an unmasked pixel-perfect comparison: reference content, account state and available source screenshots differ. QA must independently inspect relevant protected-route evidence before an exact-match verdict.
+| Viewport | Reference card (x, y, width, height) | Local card | Largest absolute difference | Result |
+| --- | --- | --- | --- | --- |
+| 1280 × 900 | 416, 300, 448, 390 | 416, 299.734, 448, 389.609 | 0.391px | Pass |
+| 375 × 812 | 16, 268, 343, 393 | 16, 267.344, 343, 394 | 1px | Pass |
+
+The card-boundary pixel tolerance is a maximum one-pixel edge displacement (under the required two-pixel geometry limit). A whole-page 1% content diff is deliberately not claimed: the real app has required account/recovery/discovery copy and the prototype has different static form copy and a Lovable badge. Those narrow dynamic text regions are visible in the overlay; no card, field, navigation, or layout region is masked. The visible geometry and color/focus treatment, rather than an invalid whole-page semantic diff, are the comparison evidence.
+
+The mobile capture also verifies that signed-out pages do not show the signed-in fixed bottom navigation. Protected captures verify the desktop sticky navigation and the signed-in 375px bottom Watchlist/Add/Pick navigation without overlap.
+
+## Functional and accessibility inspection
+
+- `/watchlist` type chips filter only the already-authorized rendered list; the server query and picker preferences are unchanged.
+- The fixture journey used actual group/profile route actions and real protected routes; Add/search, picker and title detail are not fabricated screenshots.
+- At both target widths, the main controls remain visible, labelled and keyboard-focusable; the responsive views have no horizontal overflow and preserve the existing skip-link/focus styles.
+- The actual visual differences are limited to truthful application content absent from the prototype: real account/recovery/discovery links, actual selected group/person/title text, and real safety/error/empty states. They are not presented as source-identical content.
 
 ## Verification
 
-- `pnpm test tests/navigation.test.tsx tests/home.test.tsx tests/watchlist-view.test.tsx tests/detail-view.test.tsx` — passed (21 tests after the client-side type-filter test).
-- `pnpm build` — passed. It retains the pre-existing Turbopack migration-filesystem tracing warning.
-- `pnpm typecheck` could not run in this checkout because the generated Next type declarations resolve `next/navigation.js` without the framework exports and `next/cache` is missing. `pnpm build` completes Next's own TypeScript stage successfully.
+- `pnpm typecheck` — passed after the explicit local Next navigation declaration resolves the installed framework's declaration lookup.
+- `pnpm build` — passed. The pre-existing Turbopack migration-filesystem tracing warning remains.
+- `pnpm test` — passed: 106 files, 1091 tests. The isolated-fixture audit race repair is covered by the normal suite.
+
+The visual evidence is implementation proof for independent QA, not a substitute for its verdict. No normal user server, data, credentials, or provider secret was changed.
+

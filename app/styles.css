@@ -186,17 +186,29 @@ body { min-height: 100vh; background: #f7f8fc; }
 .auth-brand { color: var(--color-text); font-size: 1.35rem; font-weight: 800; letter-spacing: -.055em; }
 .auth-brand span { color: var(--color-accent); }
 .auth-tagline { margin: 0 0 .75rem; color: var(--color-muted); text-align: center; }
-.auth-card { width: min(100%, 28rem); padding: clamp(1.5rem, 5vw, 2rem); border: 1px solid var(--color-border); border-radius: 1rem; background: var(--color-surface); box-shadow: 0 10px 28px #17233b0b; }
+.auth-card { width: min(100%, 28rem); padding: clamp(1.5rem, 5vw, 2rem); padding-bottom: 1.5rem; border: 1px solid var(--color-border); border-radius: 1rem; background: var(--color-surface); box-shadow: 0 10px 28px #17233b0b; }
 .auth-card h1, .auth-card .page-introduction { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: .25rem; padding: .25rem; border-radius: .625rem; background: var(--color-background); }
 .auth-tabs > * { display: grid; min-height: 2.5rem; place-items: center; padding-inline: .5rem; border-radius: .45rem; color: var(--color-muted); font-size: .875rem; font-weight: 700; text-decoration: none; }
 .auth-tabs [aria-current="page"] { background: var(--color-surface); color: var(--color-text); box-shadow: 0 1px 2px #17233b18; }
+.auth-card .field-label { margin-top: .6875rem; margin-bottom: .2rem; }
 .auth-card .form-fields .field-label:first-of-type { margin-top: 1.5rem; }
 .auth-card .field-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .auth-card .button { width: 100%; margin-top: 1rem; }
 .auth-links, .auth-footer { margin: 1.25rem 0 0; color: var(--color-muted); font-size: .9rem; text-align: center; }
 body:has(.auth-page) .site-header, body:has(.auth-page) .site-footer { display: none; }
 body:has(.auth-page) .main-content { width: 100%; min-height: 100svh; padding: 0; }
+/* The reference cards sit 24px below the 375px viewport centre. Keeping this
+   explicit avoids the browser's grid free-space rounding moving the form. */
+.auth-page { transform: translateY(23px); }
+.auth-brand { transform: translateY(13px); }
+.auth-tagline { transform: translateY(3px); }
+body:has(.auth-page) .mobile-navigation { display: none; }
+body:has(.auth-page) { padding-bottom: 0; }
+@media (min-width: 48rem) {
+  .auth-page { transform: translateY(22px); }
+  .auth-tagline { transform: translateY(5px); }
+}
 
 /* Shared library layout copied from the reference's grid and chips, while
    still rendering only titles that the server authorized. */
@@ -289,5 +301,5 @@ body:has(.auth-page) .main-content { width: 100%; min-height: 100svh; padding: 0
   .detail-metadata { grid-template-columns: 1fr; gap: 1.25rem; }
   .detail-metadata > .title-cover { width: min(18rem, 100%); min-height: 0; margin-inline: auto; }
   .form-fields > form { grid-template-columns: 1fr; }
-  .auth-card { padding: 1.25rem; }
+  .auth-card { min-height: 24.625rem; padding: 1.25rem; }
 }
