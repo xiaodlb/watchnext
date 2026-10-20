@@ -13,6 +13,12 @@ const destinations = [
 
 export function Navigation() {
   const pathname = usePathname();
+  if (pathname === "/mock" || pathname.startsWith("/mock/")) return (
+    <nav aria-label="Mock preview navigation"><ul className="navigation">
+      <li><Link className="navigation-link" href="/mock" prefetch={false} aria-current={pathname === "/mock" ? "page" : undefined}>Mock foundation</Link></li>
+      <li><a className="navigation-link" href="/">Exit demo</a></li>
+    </ul></nav>
+  );
   return (
     <nav aria-label="Main navigation">
       <ul className="navigation">

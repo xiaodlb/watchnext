@@ -1,8 +1,26 @@
 # WatchNext — Project Scope
 
-## Graded iteration — first-step planning only
+## Graded iteration — frontend authorization after initial planning
 
-The current app is complete through closed issues #1–#40 and [final independent QA](https://github.com/xiaodlb/watchnext/issues/40#issuecomment-6263933927), baseline `441fcaae660e273d6fc373f8757be562d9139b78` / tag `graded-baseline-2026-10-19`. [Specification](specification.md) consolidates its current requirements. The user authorized the first graded step: [plan and staged backlog](graded-mvp.md), reference/evidence/workflow documents and issues only. Thirteen `mvp` issues plus optional `post-mvp` #52 are planned; no implementation is started. The new teacher workflow gives QA regression augmentation and PASS-only closure for new `mvp`/`user-test-bug` issues, scoped in [process](process.md). Earlier run authorization below is historical and does not start this new backlog.
+The current app is complete through closed issues #1–#40 and [final independent QA](https://github.com/xiaodlb/watchnext/issues/40#issuecomment-6263933927), baseline `441fcaae660e273d6fc373f8757be562d9139b78` / tag `graded-baseline-2026-10-19`. [Specification](specification.md) consolidates its current requirements. The user authorized the first graded step: [plan and staged backlog](graded-mvp.md), reference/evidence/workflow documents and issues only. At that initial planning step, thirteen `mvp` issues plus optional `post-mvp` #52 were created without implementation. The new teacher workflow gives QA regression augmentation and PASS-only closure for new `mvp`/`user-test-bug` issues, scoped in [process](process.md). Earlier run authorization below is historical and does not start this new backlog. The later frontend request and supplied Lovable preview now authorize #41 documentation and #42 full typed mock frontend only, after prerequisite QA. [Operation inventory](operation-inventory.md) and [reference provenance](design-references.md) preserve the full baseline. Later contract/backend/ORM work remains planned, not implied by this request.
+
+## Backend/ORM authorization — October 20, 2026
+
+The user explicitly authorized implementation of #48–#54: «начни выполнять 48-54 ищщюс с гитхаба. Закрывай сразу ищщюс которые уже выполнил». The user also said that #43–#47 «сейчас выполняет другой агент» (are being done by another agent). The exact quote, translation and ownership split are in [process.md](process.md#authorization-for-issues-43-54-october-20-2026). #43–#47 belong to that other agent; this run owns #48–#54. Product scope is unchanged.
+
+**Delegated dependency choice for #48.** Made under the October 15 delegated authority quoted below; not a separate explicit user answer. Pin these exact packages:
+
+- `prisma` 7.10.0 (dev);
+- `@prisma/client` 7.10.0;
+- the official SQLite driver adapter `@prisma/adapter-better-sqlite3` 7.10.0, whose `better-sqlite3` resolves to 12.11.1.
+
+Rationale:
+
+- 7.10.0 is the newest stable 7.x release that is at least two weeks old, and it supports Node 24.
+- Prisma 7 requires a driver adapter, and no official `node:sqlite` adapter exists.
+- Native SQL migrations stay the SQLite DDL authority, behind a byte-exact Prisma baseline.
+
+No purchase is involved. Constraints and hazards are in [prisma-baseline.md](prisma-baseline.md).
 
 ## Authorized enhancement — October 18, 2026
 

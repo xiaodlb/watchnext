@@ -1,23 +1,30 @@
 # WatchNext backlog
 
-## Planned graded iteration — implementation not started
+## Graded iteration — staged issue index
 
-Read [graded-mvp.md](graded-mvp.md), [specification](specification.md) and scoped QA-owned closure rules. Labels: `mvp`, `post-mvp`, `user-test-bug`. This first step creates plan/issues only; baseline #1–#40 remains closed.
+Read [graded-mvp.md](graded-mvp.md), [specification](specification.md) and scoped QA-owned closure rules. Labels: `mvp`, `post-mvp`, `user-test-bug`. The initial step created plan/issues only; the subsequent frontend request authorizes #41 then #42 through their prerequisites/roles. Later stages were not authorized by reference access or issue creation; on 2026-10-20 the user authorized #43–#47 (another agent) and #48–#54 (this run), recorded in [process](process.md#authorization-for-issues-43-54-october-20-2026). [Operation inventory](operation-inventory.md) maps complete coverage; baseline #1–#40 remains closed.
 
 1. [#41 Operation inventory/reference pack](https://github.com/xiaodlb/watchnext/issues/41)
-2. [#42 Complete typed mock frontend](https://github.com/xiaodlb/watchnext/issues/42)
-3. [#43 Root openapi.yml](https://github.com/xiaodlb/watchnext/issues/43)
-4. [#44 Real memory identity/group HTTP](https://github.com/xiaodlb/watchnext/issues/44)
-5. [#45 Real memory library/provider HTTP](https://github.com/xiaodlb/watchnext/issues/45)
-6. [#46 Real memory personal/picker HTTP](https://github.com/xiaodlb/watchnext/issues/46)
-7. [#47 All graded UI operations over HTTP](https://github.com/xiaodlb/watchnext/issues/47)
-8. [#48 Prisma mappings/safe baseline](https://github.com/xiaodlb/watchnext/issues/48)
-9. [#49 Prisma identity/group repositories](https://github.com/xiaodlb/watchnext/issues/49)
-10. [#50 Prisma library/history repositories](https://github.com/xiaodlb/watchnext/issues/50)
-11. [#51 Full durable SQLite integration/upgrade](https://github.com/xiaodlb/watchnext/issues/51)
-12. [#52 Optional post-MVP PostgreSQL portability](https://github.com/xiaodlb/watchnext/issues/52)
-13. [#53 Genuine user testing/bugs](https://github.com/xiaodlb/watchnext/issues/53)
-14. [#54 Submission evidence](https://github.com/xiaodlb/watchnext/issues/54)
+2. [#42 Typed mock service/mode foundation](https://github.com/xiaodlb/watchnext/issues/42)
+3. [#55 Mock accounts/sign-in/recovery](https://github.com/xiaodlb/watchnext/issues/55)
+4. [#56 Mock groups/owner/legacy](https://github.com/xiaodlb/watchnext/issues/56)
+5. [#57 Mock library/Mine/detail/edit/archive](https://github.com/xiaodlb/watchnext/issues/57)
+6. [#58 Mock manual/provider Add/review](https://github.com/xiaodlb/watchnext/issues/58)
+7. [#59 Mock personal progress/feedback](https://github.com/xiaodlb/watchnext/issues/59)
+8. [#60 Mock picker/cycle](https://github.com/xiaodlb/watchnext/issues/60)
+9. [#61 Full frontend integration/coverage/evidence](https://github.com/xiaodlb/watchnext/issues/61)
+10. [#43 Root openapi.yml](https://github.com/xiaodlb/watchnext/issues/43)
+11. [#44 Real memory identity/group HTTP](https://github.com/xiaodlb/watchnext/issues/44)
+12. [#45 Real memory library/provider HTTP](https://github.com/xiaodlb/watchnext/issues/45)
+13. [#46 Real memory personal/picker HTTP](https://github.com/xiaodlb/watchnext/issues/46)
+14. [#47 All graded UI operations over HTTP](https://github.com/xiaodlb/watchnext/issues/47)
+15. [#48 Prisma mappings/safe baseline](https://github.com/xiaodlb/watchnext/issues/48)
+16. [#49 Prisma identity/group repositories](https://github.com/xiaodlb/watchnext/issues/49)
+17. [#50 Prisma library/history repositories](https://github.com/xiaodlb/watchnext/issues/50)
+18. [#51 Full durable SQLite integration/upgrade](https://github.com/xiaodlb/watchnext/issues/51)
+19. [#52 Optional post-MVP PostgreSQL portability](https://github.com/xiaodlb/watchnext/issues/52)
+20. [#53 Genuine user testing/bugs](https://github.com/xiaodlb/watchnext/issues/53)
+21. [#54 Submission evidence](https://github.com/xiaodlb/watchnext/issues/54)
 
 ## Completed account/discovery enhancement — historical sequence
 

@@ -6,9 +6,22 @@ Planning-only requests stop after PM documents and issues. Creating a groomed is
 
 ## New graded iteration: planning boundary and scoped workflow
 
-The current first step authorizes graded plan/specification/issues/workflow documents only. [Graded MVP](graded-mvp.md) describes planned issues #41–#54; do not start them merely because they exist. Original #1–#40 are closed after final independent QA at baseline `441fcaae660e273d6fc373f8757be562d9139b78`, preserved by `graded-baseline-2026-10-19`.
+The initial first step authorized graded plan/specification/issues/workflow documents only. The later user frontend request and Lovable reference authorize #41 then #42 through prerequisite PM/Engineer/QA; later contract/backend/ORM stages are not authorized by that request. [Graded MVP](graded-mvp.md) describes issues #41–#54; do not start other stages merely because they exist. Original #1–#40 are closed after final independent QA at baseline `441fcaae660e273d6fc373f8757be562d9139b78`, preserved by `graded-baseline-2026-10-19`.
 
 For new issues labeled `mvp` or `user-test-bug`, the teacher workflow supersedes the older closure rule below: PM grooms; for genuine reported bugs QA adds runnable regression cases before Engineer repair; Engineer implements/tests/comments and leaves open; QA independently posts criterion-by-criterion PASS/FAIL and **QA closes only after actual PASS**. On FAIL return to Engineer. QA may change regression tests during bug grooming, never product implementation. Orchestrator coordinates, not closes these new issues. Historical closure of #1–#40 is not rewritten. Human hands-on testing must be real; [bug template](user-test-bug-template.md), [manual checklist](manual-testing.md) and [iteration log](iteration-log.md) retain actual evidence. Optional ideas are `post-mvp`.
+
+## Authorization for issues 43-54 (October 20, 2026)
+
+On 2026-10-20 the user explicitly wrote: «начни выполнять 48-54 ищщюс с гитхаба. Закрывай сразу ищщюс которые уже выполнил» (“start implementing issues 48–54 from GitHub. Close issues right away once they are done.”) and «43-47 сейчас выполняет другой агент» (“43–47 are currently being done by another agent”).
+
+This authorizes implementation of the planned graded stages beyond the frontend:
+
+- **#43–#47** (OpenAPI and memory HTTP) belong to the other agent, on upstream branch `codex/backend-preparation`.
+- **#48–#54** belong to this run, based on the accepted mock-frontend branch `claude/trusting-meitner-longv2`.
+
+Each issue still goes one at a time through PM → Engineer → independent QA, and QA closes `mvp` issues only after an actual PASS. “Close right away” means closing promptly after that PASS, not skipping QA.
+
+This run does not implement #43–#47. Where a #48–#54 issue needs their output, it waits or uses a bounded fixture/stub, as listed in [prisma-baseline.md](prisma-baseline.md). Optional #52 stays `post-mvp`. #53 requires genuine human testing that agents cannot supply.
 
 ## Roles (all work)
 

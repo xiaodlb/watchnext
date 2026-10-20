@@ -16,3 +16,4 @@ coverage/
 *.log
 **/.watchnext-demo-owner.json
 **/.watchnext-demo-test-owner.json
+/generated/
