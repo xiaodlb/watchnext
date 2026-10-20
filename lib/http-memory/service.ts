@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { AuthError, checkPassword, makePassword, passwordInput, security, usernameInput } from "../accounts/security";
+import { ProcessMemoryRepository } from "./repository";
 
 type Account={id:string;username:string;key:string;password_version:number;password_algorithm:string;password_hash:string;password_salt:string;password_n:number;password_r:number;password_p:number;password_maxmem:number;recovery:string};
 type Session={token:string;accountId:string;expires:number;revoked:boolean;revision:number;groupId:string|null};
@@ -8,8 +9,10 @@ type Group={id:string;name:string;kind:"account"|"legacy";owner:string|null;gene
 type Invite={token:string;groupId:string;generation:number;revoked:boolean};
 type Pending={groupId:string;generation:number;expires:number;revision:number};
 type State={accounts:Map<string,Account>;byKey:Map<string,string>;sessions:Map<string,Session>;groups:Map<string,Group>;invites:Map<string,Invite>;pending:Map<string,Pending>;legacy:Map<string,{groupId:string;profileId:string|null;revision:number}>};
-const shared=globalThis as typeof globalThis&{__watchnextHttpMemory?:State};
-const state=()=>shared.__watchnextHttpMemory??={accounts:new Map(),byKey:new Map(),sessions:new Map(),groups:new Map(),invites:new Map(),pending:new Map(),legacy:new Map()};
+const empty=():State=>({accounts:new Map(),byKey:new Map(),sessions:new Map(),groups:new Map(),invites:new Map(),pending:new Map(),legacy:new Map()});
+const shared=globalThis as typeof globalThis&{__watchnextHttpMemoryRepository?:ProcessMemoryRepository<State>};
+const repository=()=>shared.__watchnextHttpMemoryRepository??=new ProcessMemoryRepository(empty);
+const state=()=>repository().read();
 const hash=(value:string)=>createHash("sha256").update(value).digest("hex");
 const token=()=>randomBytes(32).toString("base64url");
 const cookie=(request:Request,name:string)=>{const found=(request.headers.get("cookie")??"").split(";").map(x=>x.trim()).filter(x=>x.startsWith(name+"="));return found.length===1?found[0].slice(name.length+1):undefined;};
@@ -55,4 +58,4 @@ export async function handleMemory(request:Request,path:string[]):Promise<Respon
  }catch(e){const message=e instanceof AuthError?e.message:"The request could not be completed.";const status=/stale|generation|invalid|access|Authentication|origin|Invitation/i.test(message)?409:422;return error(status,status===409?"conflict":"validation_failed",message);}
 }
 
-export function resetHttpMemoryForTests(){delete shared.__watchnextHttpMemory;}
+export function resetHttpMemoryForTests(){repository().reset();}
