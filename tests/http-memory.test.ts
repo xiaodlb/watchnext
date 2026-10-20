@@ -2,6 +2,7 @@
 import { afterEach, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { handleMemory, resetHttpMemoryForTests } from "../lib/http-memory/service";
+import { GET, POST } from "../app/v1/[...path]/route";
 
 const origin="http://127.0.0.1:3000", password="Synthetic memory password";
 const request=(path:string,body?:unknown,cookie?:string,method="POST")=>new Request(`${origin}/v1/${path}`,{method,headers:{...(method==="GET"?{}:{origin,"content-type":"application/json"}),...(cookie?{cookie}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
@@ -53,4 +54,14 @@ it("exercises every remaining declared identity/group/legacy operation and keeps
  const profile=await handleMemory(request("legacy/groups/current/profiles",{expectedContextRevision:1,name:"Complete profile",color:"teal"},legacyCookie),["legacy","groups","current","profiles"]),workspace=await profile.json();
  expect((await handleMemory(request("legacy/context/profile",{expectedContextRevision:2,profileId:workspace.profileId},legacyCookie,"PUT"),["legacy","context","profile"])).status).toBe(200); // L04
  expect(readFileSync("lib/http-memory/service.ts","utf8")).not.toMatch(/node:sqlite|db\/|getDatabase/);
+});
+
+it("uses the actual Next catch-all Route Handler with isolated cookie contexts and loses authority after reset",async()=>{
+ process.env.WATCHNEXT_HTTP_MEMORY="1";const route=(path:string,body?:unknown,cookie?:string,method="POST")=>{const nextRequest=request(path,body,cookie,method);const context={params:Promise.resolve({path:path.split("/")})};return method==="GET"?GET(nextRequest,context):POST(nextRequest,context);};
+ const ownerResponse=await route("auth/register",{username:"Route.Owner",password,confirmation:password}),owner=cookieOf(ownerResponse,"watchnext_account_session");expect(ownerResponse.status).toBe(200);
+ const groupResponse=await route("groups",{expectedContextRevision:1,name:"Route group"},owner),group=await groupResponse.json();
+ const memberResponse=await route("auth/register",{username:"Route.Member",password,confirmation:password}),member=cookieOf(memberResponse,"watchnext_account_session");
+ await route("invitations/resolve",{invite:group.invite},member);const joined=await route("groups/pending/join",{expectedContextRevision:1},member);expect(joined.status).toBe(200);
+ const denied=await route("groups/current/members/remove",{expectedContextRevision:2,memberId:"wrong",confirmed:true},member);expect(denied.status).toBeGreaterThanOrEqual(400);
+ resetHttpMemoryForTests();const lost=await route("context",undefined,owner,"GET");expect((await lost.json()).account).toBeNull();
 });
