@@ -1,8 +1,10 @@
 import {resolve as resolveScriptPath} from "node:path";
 import {pathToFileURL as scriptURL} from "node:url";
 import { randomBytes } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import { createFixture, safeDiagnostic } from "../e2e/lifecycle.mjs";
 import { credentialHash } from "../../lib/sessions.ts";
+import { createGroup as createLegacyGroup } from "../../lib/groups.ts";
 let f, failure, current = "setup";
 const check = (value, label) => { if (!value) throw new Error(`Expected ${label}; observed condition false`); };
 const step = async (name, run) => { current = name; await run(); console.log(`PASS ${name}`); };
@@ -36,8 +38,13 @@ try {
     await step(`${width}: two actual accounts and independent target sessions plus legacy context`, async () => {
       saved = await register(page, name, old); await register(other, otherName, old);
       await login(page2, name, old); await page2.waitForURL("**/account"); await capture(second);
-      await page.goto(f.origin); await page.getByLabel("Group name", { exact: true }).fill(`Recovery legacy ${width}`); await page.getByRole("button", { name: "Create group", exact: true }).press("Enter");
-      const input = page.getByLabel("Invite link"); await input.waitFor(); const invite = await input.inputValue(); f.secrets.push(invite.split("/").at(-1)); await page.goto(invite); await page.waitForURL("**/group"); await capture(a);
+      // Legacy groups no longer have a public creation screen. Use the real
+      // domain service only to prepare an isolated invitation, then exercise
+      // the browser's invite and legacy-context behavior below.
+      const writer = new DatabaseSync(f.path); let invite;
+      try { invite = createLegacyGroup(writer, `Recovery legacy ${width}`, f.origin).inviteUrl; }
+      finally { writer.close(); }
+      f.secrets.push(invite.split("/").at(-1)); await page.goto(invite); await page.waitForURL("**/group"); await capture(a);
       legacy = (await a.cookies()).find(cookie => cookie.name === "watchnext_session").value;
     });
     await step(`${width}: generic invalid proof, private replacement and all target sessions revoked`, async () => {

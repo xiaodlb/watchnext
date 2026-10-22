@@ -86,7 +86,9 @@ try {
       await pageA.goto(f.origin + "/account"); await pageA.waitForURL("**/login"); check(new URL(pageA.url()).pathname === "/login", "tampered credential denied");
     });
     await step(`${width}: keyboard/responsive privacy and honest legacy separation`, async () => {
-      await pageA.goto(f.origin); await pageA.getByRole("heading", { name: "Legacy group access", exact: true }).waitFor();
+      await pageA.goto(f.origin); await pageA.getByRole("heading", { name: "WatchNext", exact: true }).waitFor();
+      await pageA.getByRole("link", { name: "Open a legacy group", exact: true }).press("Enter");
+      await pageA.getByRole("heading", { name: "Group access unavailable", exact: true }).waitFor();
       await pageA.goto(f.origin + "/login"); await pageA.keyboard.press("Tab"); check(await pageA.evaluate(() => document.activeElement?.tagName === "A"), "keyboard focus visible on link");
       for (const page of [pageA, pageB]) check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "no horizontal overflow");
       for (const page of [pageA, pageB]) check(await page.evaluate(() => localStorage.length === 0 && sessionStorage.length === 0), "no web storage secrets");
