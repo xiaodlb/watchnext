@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
-import { handleMemory, resetHttpMemoryForTests } from "../lib/http-memory/service";
+import { handleMemory, resetHttpMemoryForTests, setHttpMemoryProvidersForTests } from "../lib/http-memory/service";
 import { GET, POST } from "../app/v1/[...path]/route";
 
 const origin="http://127.0.0.1:3000", password="Synthetic memory password";
@@ -81,4 +81,33 @@ it("denies a removed member's selected-group read until a newer invitation rejoi
  const rejoinIntent=await handleMemory(request("invitations/resolve",{invite:rotated.invite},member),["invitations","resolve"]),rejoinPending=await rejoinIntent.json();
  const rejoined=await handleMemory(request("groups/pending/join",{expectedContextRevision:rejoinPending.context.revision},member),["groups","pending","join"]),after=await rejoined.json();
  expect(after.members.find((entry:{name:string})=>entry.name==="Epoch.Member").id).toBe(memberId);
+});
+
+it("runs the shared memory library over live account cookies, preserving one title ID through contribution, archive and restore",async()=>{
+ process.env.WATCHNEXT_HTTP_MEMORY="1";
+ const ownerRegistration=await handleMemory(request("auth/register",{username:"Library.Owner",password,confirmation:password}),["auth","register"]),owner=cookieOf(ownerRegistration,"watchnext_account_session");
+ const groupResponse=await handleMemory(request("groups",{expectedContextRevision:1,name:"Library group"},owner),["groups"]),group=await groupResponse.json();
+ const memberRegistration=await handleMemory(request("auth/register",{username:"Library.Member",password,confirmation:password}),["auth","register"]),member=cookieOf(memberRegistration,"watchnext_account_session");
+ await handleMemory(request("invitations/resolve",{invite:group.invite},member),["invitations","resolve"]);await handleMemory(request("groups/pending/join",{expectedContextRevision:1},member),["groups","pending","join"]);
+ const title={expectedContextRevision:2,title:"Shared funny film",contentType:"movie",durationSeconds:1500,numberingStyle:"none",genres:["Comedy"],moods:["funny"],watchUrl:"https://example.test/watch",sourceUrl:null,coverUrl:null};
+ const saved=await handleMemory(request("library/manual",title,owner),["library","manual"]);expect(saved.status).toBe(200);const first=await saved.json();expect(first.status).toBe("created");
+ const contribution=await handleMemory(request("library/manual",{...title,expectedContextRevision:2},member),["library","manual"]);expect(contribution.status).toBe(200);expect((await contribution.json()).status).toBe("contributed");
+ const mine=await handleMemory(request("library?filter=mine",undefined,member,"GET"),["library"]);expect((await mine.json()).items).toHaveLength(1);
+ const removed=await handleMemory(request(`library/${first.title.id}/contribution/remove`,{expectedContextRevision:2},owner),["library",first.title.id,"contribution","remove"]);expect((await removed.json()).status).toBe("removed");
+ const archived=await handleMemory(request(`library/${first.title.id}/contribution/remove`,{expectedContextRevision:2},member),["library",first.title.id,"contribution","remove"]);expect((await archived.json()).status).toBe("archived");
+ const restored=await handleMemory(request(`library/archive/${first.title.id}/restore`,{expectedContextRevision:2},owner),["library","archive",first.title.id,"restore"]);const restoredBody=await restored.json();expect(restoredBody.status).toBe("restored");expect(restoredBody.title.id).toBe(first.title.id);
+ const foreign=await handleMemory(request(`library/${first.title.id}`,undefined,undefined,"GET"),["library",first.title.id]);expect(foreign.status).toBeGreaterThanOrEqual(400);
+});
+
+it("uses injected outbound-only provider fixtures for candidate review, then keeps the reviewed provider title in the real memory library",async()=>{
+ process.env.WATCHNEXT_HTTP_MEMORY="1";
+ const provider={namespace:"youtube" as const,lookup:async(query:{kind:"search";text:string;pageToken?:string}|{kind:"detail";externalId:string})=>query.kind==="search"?{kind:"search" as const,candidates:[{externalId:"AbCdEf12345",title:"Fixture clip",contentType:"youtube",duration:{seconds:90,meaning:"full_item",verified:true},coverUrl:"https://i.ytimg.com/vi/AbCdEf12345/hqdefault.jpg",sourceUrl:"https://www.youtube.com/watch?v=AbCdEf12345",watchUrl:"https://www.youtube.com/watch?v=AbCdEf12345",genres:[]}]}:{kind:"item" as const,item:{externalId:"AbCdEf12345",title:"Fixture clip",contentType:"youtube",duration:{seconds:90,meaning:"full_item",verified:true},coverUrl:"https://i.ytimg.com/vi/AbCdEf12345/hqdefault.jpg",sourceUrl:"https://www.youtube.com/watch?v=AbCdEf12345",watchUrl:"https://www.youtube.com/watch?v=AbCdEf12345",genres:[]}}};
+ setHttpMemoryProvidersForTests({youtube:provider,kinopoisk_unofficial:{namespace:"kinopoisk_unofficial",lookup:async()=>({kind:"failure",code:"not_configured"})}});
+ const registered=await handleMemory(request("auth/register",{username:"Provider.Owner",password,confirmation:password}),["auth","register"]),owner=cookieOf(registered,"watchnext_account_session");
+ await handleMemory(request("groups",{expectedContextRevision:1,name:"Provider group"},owner),["groups"]);
+ const search=await handleMemory(request("metadata/search",{expectedContextRevision:2,source:"youtube",kind:"title",query:"fixture"},owner),["metadata","search"]);expect(search.status).toBe(200);const page=await search.json();expect(page.candidates).toHaveLength(1);
+ const selected=await handleMemory(request(`metadata/pages/${page.handle}/candidates/AbCdEf12345`,{expectedContextRevision:2},owner),["metadata","pages",page.handle,"candidates","AbCdEf12345"]);expect(selected.status).toBe(200);const review=await selected.json();
+ const saved=await handleMemory(request(`metadata/reviews/${review.handle}/save`,{expectedContextRevision:2,moods:["funny"],numberingStyle:"none"},owner),["metadata","reviews",review.handle,"save"]);expect(saved.status).toBe(200);const body=await saved.json();expect(body.status).toBe("created");
+ const replay=await handleMemory(request(`metadata/reviews/${review.handle}/save`,{expectedContextRevision:2,moods:["funny"],numberingStyle:"none"},owner),["metadata","reviews",review.handle,"save"]);expect(replay.status).toBeGreaterThanOrEqual(400);
+ const listed=await handleMemory(request("library",undefined,owner,"GET"),["library"]);expect((await listed.json()).items[0]).toMatchObject({id:body.title.id,title:"Fixture clip",contentType:"youtube"});
 });
