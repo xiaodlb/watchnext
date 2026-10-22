@@ -65,3 +65,18 @@ it("uses the actual Next catch-all Route Handler with isolated cookie contexts a
  const denied=await route("groups/current/members/remove",{expectedContextRevision:2,memberId:"wrong",confirmed:true},member);expect(denied.status).toBeGreaterThanOrEqual(400);
  resetHttpMemoryForTests();const lost=await route("context",undefined,owner,"GET");expect((await lost.json()).account).toBeNull();
 });
+
+it("denies a removed member's selected-group read until a newer invitation rejoins the same member",async()=>{
+ process.env.WATCHNEXT_HTTP_MEMORY="1";
+ const ownerRegistration=await handleMemory(request("auth/register",{username:"Epoch.Owner",password,confirmation:password}),["auth","register"]),owner=cookieOf(ownerRegistration,"watchnext_account_session");
+ const created=await handleMemory(request("groups",{expectedContextRevision:1,name:"Epoch group"},owner),["groups"]),group=await created.json();
+ const memberRegistration=await handleMemory(request("auth/register",{username:"Epoch.Member",password,confirmation:password}),["auth","register"]),member=cookieOf(memberRegistration,"watchnext_account_session");
+ const intent=await handleMemory(request("invitations/resolve",{invite:group.invite},member),["invitations","resolve"]),pending=await intent.json();
+ const joined=await handleMemory(request("groups/pending/join",{expectedContextRevision:pending.context.revision},member),["groups","pending","join"]),workspace=await joined.json(),memberId=workspace.members.find((entry:{name:string})=>entry.name==="Epoch.Member").id;
+ const removed=await handleMemory(request("groups/current/members/remove",{expectedContextRevision:2,memberId,confirmed:true},owner),["groups","current","members","remove"]);expect(removed.status).toBe(200);
+ expect((await handleMemory(request("groups/current",undefined,member,"GET"),["groups","current"])).status).toBeGreaterThanOrEqual(400);
+ const rotation=await handleMemory(request("groups/current/invitations/rotate",{expectedContextRevision:2,generation:1,confirmed:true},owner),["groups","current","invitations","rotate"]),rotated=await rotation.json();
+ const rejoinIntent=await handleMemory(request("invitations/resolve",{invite:rotated.invite},member),["invitations","resolve"]),rejoinPending=await rejoinIntent.json();
+ const rejoined=await handleMemory(request("groups/pending/join",{expectedContextRevision:rejoinPending.context.revision},member),["groups","pending","join"]),after=await rejoined.json();
+ expect(after.members.find((entry:{name:string})=>entry.name==="Epoch.Member").id).toBe(memberId);
+});
