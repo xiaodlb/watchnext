@@ -74,7 +74,9 @@ it("denies a removed member's selected-group read until a newer invitation rejoi
  const intent=await handleMemory(request("invitations/resolve",{invite:group.invite},member),["invitations","resolve"]),pending=await intent.json();
  const joined=await handleMemory(request("groups/pending/join",{expectedContextRevision:pending.context.revision},member),["groups","pending","join"]),workspace=await joined.json(),memberId=workspace.members.find((entry:{name:string})=>entry.name==="Epoch.Member").id;
  const removed=await handleMemory(request("groups/current/members/remove",{expectedContextRevision:2,memberId,confirmed:true},owner),["groups","current","members","remove"]);expect(removed.status).toBe(200);
- expect((await handleMemory(request("groups/current",undefined,member,"GET"),["groups","current"])).status).toBeGreaterThanOrEqual(400);
+ const current=await handleMemory(request("groups/current",undefined,member,"GET"),["groups","current"]);expect(current.status).toBeGreaterThanOrEqual(400);
+ const staleContext=await handleMemory(request("context",undefined,member,"GET"),["context"]),contextBody=await staleContext.json();
+ expect(staleContext.status).toBe(200);expect(contextBody).toMatchObject({context:{mode:"account",groupId:null},account:{username:"Epoch.Member",memberships:[]},group:null});expect(JSON.stringify(contextBody)).not.toContain(group.context.groupId);
  const rotation=await handleMemory(request("groups/current/invitations/rotate",{expectedContextRevision:2,generation:1,confirmed:true},owner),["groups","current","invitations","rotate"]),rotated=await rotation.json();
  const rejoinIntent=await handleMemory(request("invitations/resolve",{invite:rotated.invite},member),["invitations","resolve"]),rejoinPending=await rejoinIntent.json();
  const rejoined=await handleMemory(request("groups/pending/join",{expectedContextRevision:rejoinPending.context.revision},member),["groups","pending","join"]),after=await rejoined.json();

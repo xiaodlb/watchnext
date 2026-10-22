@@ -88,6 +88,9 @@ try {
   check(removal.response.status === 200, "Owner could not remove a participant.");
   const removedRead = await call(member, "groups/current", undefined, "GET");
   check(removedRead.response.status >= 400, "Removed participant retained group access.");
+  const removedContext = await call(member, "context", undefined, "GET");
+  check(removedContext.response.status === 200 && removedContext.value.context?.groupId === null && removedContext.value.group === null && removedContext.value.account?.memberships?.length === 0, "Removed participant context disclosed the selected group.");
+  check(!JSON.stringify(removedContext.value).includes(created.value.context.groupId), "Removed participant context leaked the selected group identifier.");
   const rotation = await call(owner, "groups/current/invitations/rotate", { expectedContextRevision: revision(removal.value), generation: 1, confirmed: true });
   check(rotation.response.status === 200, "Owner could not rotate an invitation.");
   const oldInvite = await call(member, "invitations/resolve", { invite: created.value.invite });
