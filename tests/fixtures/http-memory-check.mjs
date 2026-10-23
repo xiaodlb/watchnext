@@ -101,6 +101,18 @@ try {
   check(sharedContribution.status === 200 && sharedContribution.value.status === "contributed", "Second browser context could not add its contributor attribution.");
   const ownerAll = await browserOwner.call("library?filter=all", undefined, "GET"), memberMine = await browserMember.call("library?filter=mine", undefined, "GET");
   check(ownerAll.value.items.length === 4 && memberMine.value.items.length === 1 && memberMine.value.items[0].id === movie.value.title.id, "Browser contexts did not receive group-scoped All/Mine library projections.");
+  const ownerEpisode = await browserOwner.call(`library/${series.value.title.id}/progress/episode`, { expectedContextRevision: ownerRevision, position: "not_started", season: null, episode: 1 }, "PUT");
+  const memberEpisode = await browserMember.call(`library/${series.value.title.id}/progress/episode`, { expectedContextRevision: memberRevision, position: "not_started", season: null, episode: 1 }, "PUT");
+  const ownerTimestamp = await browserOwner.call(`library/${movie.value.title.id}/progress/timestamp`, { expectedContextRevision: ownerRevision, timestampSeconds: 0 }, "PUT");
+  const memberRating = await browserMember.call(`library/${movie.value.title.id}/rating`, { expectedContextRevision: memberRevision, score: 9 }, "PUT");
+  const memberNote = await browserMember.call(`library/${movie.value.title.id}/note`, { expectedContextRevision: memberRevision, note: "Browser\nprivate note" }, "PUT");
+  check([ownerEpisode, memberEpisode, ownerTimestamp, memberRating, memberNote].every(result => result.status === 200), "Browser contexts could not save independent personal progress and feedback.");
+  const pickerInputs = await browserOwner.call("picker/inputs", undefined, "GET");
+  const pick = await browserOwner.call("picker/pick", { expectedContextRevision: ownerRevision, viewerIds: pickerInputs.value.viewers.map(viewer => viewer.id), availableMinutes: 25, mood: "funny", rewatches: false, intentId: "browser-start" });
+  const pickAgain = await browserOwner.call(`picker/cycles/${pick.value.cycle?.cycleId}/next`, { expectedContextRevision: ownerRevision, step: pick.value.cycle?.step, intentId: "browser-next" });
+  check(pickerInputs.status === 200 && pickerInputs.value.viewers.length === 2 && pick.status === 200 && pick.value.kind === "picked" && pickAgain.status === 200 && ["picked", "exhausted"].includes(pickAgain.value.kind), "Browser picker did not use fresh shared progress and the bounded HTTP cycle.");
+  const ownerPersonal = await browserOwner.call(`library/${movie.value.title.id}`, undefined, "GET");
+  check(ownerPersonal.value.personal?.timestampSeconds === 0 && ownerPersonal.value.history.some(entry => entry.rating === 9 && entry.note === "Browser\nprivate note"), "Browser personal history projection was not attributed to the current member.");
   const missingRemoveConfirmation = await browserOwner.call(`library/${movie.value.title.id}/contribution/remove`, { expectedContextRevision: ownerRevision, revision: sharedContribution.value.title.revision });
   const staleRemove = await browserOwner.call(`library/${movie.value.title.id}/contribution/remove`, { expectedContextRevision: ownerRevision, revision: sharedContribution.value.title.revision - 1, confirmed: true });
   check(missingRemoveConfirmation.status >= 400 && staleRemove.status >= 400, "Browser W07 accepted missing confirmation or a stale title revision.");
