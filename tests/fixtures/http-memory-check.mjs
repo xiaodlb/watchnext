@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repo = fileURLToPath(new URL("../../", import.meta.url));
 const root = mkdtempSync(join(tmpdir(), "watchnext-http-memory-"));
 const password = "Synthetic memory password";
-let server;
+let server, browser;
 
 const fail = message => { throw new Error(message); };
 const check = (value, message) => { if (!value) fail(message); };
@@ -25,7 +25,7 @@ const database = join(root, "must-not-exist.sqlite");
 const environment = {
   ...process.env,
   HOME: join(root, "home"), USERPROFILE: join(root, "home"), LOCALAPPDATA: join(root, "local"), XDG_DATA_HOME: join(root, "local"),
-  WATCHNEXT_APP_ORIGIN: origin, WATCHNEXT_DATABASE_PATH: database, WATCHNEXT_HTTP_MEMORY: "1", NEXT_TELEMETRY_DISABLED: "1",
+  WATCHNEXT_APP_ORIGIN: origin, WATCHNEXT_DATABASE_PATH: database, WATCHNEXT_HTTP_MEMORY: "1", WATCHNEXT_HTTP_METADATA_FIXTURES: "1", NEXT_TELEMETRY_DISABLED: "1",
 };
 
 async function stop() {
@@ -61,12 +61,60 @@ async function call(client, path, body, method = "POST", extra = {}) {
   return { response, value: await response.json() };
 }
 const revision = value => value.context.revision;
+async function browserClient(width) {
+  const context = await browser.newContext({ viewport: { width, height: 900 } });
+  await context.route("**/*", route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+  const page = await context.newPage();
+  await page.goto(`${origin}/v1/context`);
+  const callFromPage = (path, body, method = "POST") => page.evaluate(async ({ path, body, method }) => {
+    const response = await fetch(`/v1/${path}`, { method, headers: method === "GET" ? {} : { origin: location.origin, "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+    return { status: response.status, value: await response.json() };
+  }, { path, body, method });
+  return { context, page, call: callFromPage };
+}
 
 try {
   const build = spawn(process.execPath, ["node_modules/next/dist/bin/next", "build"], { cwd: repo, env: environment, stdio: "inherit", windowsHide: true });
   const buildCode = await new Promise((resolve, reject) => { build.once("error", reject); build.once("exit", resolve); });
   check(buildCode === 0, "Production build failed.");
   await start();
+
+  const { chromium } = await import("playwright");
+  browser = await chromium.launch({ headless: true, args: ["--disable-background-networking", "--no-first-run"] });
+  const browserOwner = await browserClient(1280), browserMember = await browserClient(375);
+  const ownerBrowserRegistration = await browserOwner.call("auth/register", { username: "Browser.Library.Owner", password, confirmation: password });
+  check(ownerBrowserRegistration.status === 200, "First browser context could not register.");
+  const browserGroup = await browserOwner.call("groups", { name: "Browser library group", expectedContextRevision: revision(ownerBrowserRegistration.value) });
+  check(browserGroup.status === 200, "First browser context could not create its group.");
+  const memberBrowserRegistration = await browserMember.call("auth/register", { username: "Browser.Library.Member", password, confirmation: password });
+  const browserInvite = await browserMember.call("invitations/resolve", { invite: browserGroup.value.invite });
+  const browserJoined = await browserMember.call("groups/pending/join", { expectedContextRevision: revision(browserInvite.value) });
+  check(memberBrowserRegistration.status === 200 && browserJoined.status === 200, "Second browser context could not join the library group.");
+  const ownerRevision = 2, memberRevision = revision(browserJoined.value);
+  const manual = (title, contentType, durationSeconds, numberingStyle) => ({ expectedContextRevision: ownerRevision, title, contentType, durationSeconds, numberingStyle, genres: ["Comedy"], moods: ["funny"], watchUrl: "https://example.test/watch", sourceUrl: null, coverUrl: null });
+  const movie = await browserOwner.call("library/manual", manual("Browser movie", "movie", 1200, "none"));
+  const series = await browserOwner.call("library/manual", manual("Browser series", "series", 1440, "continuous"));
+  const anime = await browserOwner.call("library/manual", manual("Browser anime", "anime", 1320, "season_episode"));
+  const video = await browserOwner.call("library/manual", manual("Browser video", "youtube", 180, "none"));
+  check([movie, series, anime, video].every(result => result.status === 200 && result.value.status === "created"), "Browser library journey could not save all four manual content types.");
+  const sharedContribution = await browserMember.call("library/manual", { ...manual("Browser movie", "movie", 1200, "none"), expectedContextRevision: memberRevision });
+  check(sharedContribution.status === 200 && sharedContribution.value.status === "contributed", "Second browser context could not add its contributor attribution.");
+  const ownerAll = await browserOwner.call("library?filter=all", undefined, "GET"), memberMine = await browserMember.call("library?filter=mine", undefined, "GET");
+  check(ownerAll.value.items.length === 4 && memberMine.value.items.length === 1 && memberMine.value.items[0].id === movie.value.title.id, "Browser contexts did not receive group-scoped All/Mine library projections.");
+  const ytSearch = await browserOwner.call("metadata/search", { expectedContextRevision: ownerRevision, source: "youtube", kind: "title", query: "browser fixture" });
+  check(ytSearch.status === 200 && ytSearch.value.candidates.length === 1, "Browser provider journey did not receive a YouTube candidate through the adapter.");
+  const foreignSelection = await browserMember.call(`metadata/pages/${ytSearch.value.handle}/candidates/AbCdEf12345`, { expectedContextRevision: memberRevision });
+  check(foreignSelection.status >= 400, "A browser context used another member's provider page handle.");
+  const ytReview = await browserOwner.call(`metadata/pages/${ytSearch.value.handle}/candidates/AbCdEf12345`, { expectedContextRevision: ownerRevision });
+  const ytSaved = await browserOwner.call(`metadata/reviews/${ytReview.value.handle}/save`, { expectedContextRevision: ownerRevision, moods: ["funny"], numberingStyle: "none" });
+  check(ytReview.status === 200 && ytSaved.status === 200 && ytSaved.value.status === "created", "Browser provider review/save did not use the real memory library.");
+  const refreshed = await browserOwner.call(`library/${ytSaved.value.title.id}/metadata/refresh`, { expectedContextRevision: ownerRevision });
+  check(refreshed.status === 200, "Browser provider refresh was unavailable after a reviewed save.");
+  const kinoSearch = await browserOwner.call("metadata/search", { expectedContextRevision: ownerRevision, source: "kinopoisk", kind: "title", query: "browser fixture" });
+  const kinoReview = await browserOwner.call(`metadata/pages/${kinoSearch.value.handle}/candidates/424242`, { expectedContextRevision: ownerRevision });
+  const kinoSaved = await browserOwner.call(`metadata/reviews/${kinoReview.value.handle}/save`, { expectedContextRevision: ownerRevision, moods: ["funny"], numberingStyle: "none" });
+  check(kinoSearch.status === 200 && kinoReview.status === 200 && kinoSaved.status === 200 && kinoSaved.value.status === "created", "Browser Kinopoisk candidate/review/save did not use the server adapter.");
+  await browserOwner.context.close(); await browserMember.context.close();
 
   const owner = jar(), member = jar(), outsider = jar(), legacy = jar();
   const ownerRegistration = await call(owner, "auth/register", { username: "Http.Owner", password, confirmation: password });
@@ -116,8 +164,9 @@ try {
   const afterRestart = await call(owner, "context", undefined, "GET");
   check(afterRestart.response.status === 200 && afterRestart.value.account === null, "Owned server restart retained an in-memory account or session.");
   check(!existsSync(database), "Memory-mode restart opened the configured SQLite database.");
-  console.log("HTTP memory journey passed: independent clients, auth/group/legacy guards, removal/rejoin, and restart loss.");
+  console.log("HTTP memory journey passed: two browser contexts cover four library types, contributor attribution, All/Mine, YouTube/Kinopoisk review/refresh, plus independent auth/group/legacy guards and restart loss.");
 } finally {
+  await browser?.close();
   await stop();
   rmSync(root, { recursive: true, force: true });
 }
