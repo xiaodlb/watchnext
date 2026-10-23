@@ -101,6 +101,16 @@ try {
   check(sharedContribution.status === 200 && sharedContribution.value.status === "contributed", "Second browser context could not add its contributor attribution.");
   const ownerAll = await browserOwner.call("library?filter=all", undefined, "GET"), memberMine = await browserMember.call("library?filter=mine", undefined, "GET");
   check(ownerAll.value.items.length === 4 && memberMine.value.items.length === 1 && memberMine.value.items[0].id === movie.value.title.id, "Browser contexts did not receive group-scoped All/Mine library projections.");
+  const missingRemoveConfirmation = await browserOwner.call(`library/${movie.value.title.id}/contribution/remove`, { expectedContextRevision: ownerRevision, revision: sharedContribution.value.title.revision });
+  const staleRemove = await browserOwner.call(`library/${movie.value.title.id}/contribution/remove`, { expectedContextRevision: ownerRevision, revision: sharedContribution.value.title.revision - 1, confirmed: true });
+  check(missingRemoveConfirmation.status >= 400 && staleRemove.status >= 400, "Browser W07 accepted missing confirmation or a stale title revision.");
+  const ownerRemoved = await browserOwner.call(`library/${movie.value.title.id}/contribution/remove`, { expectedContextRevision: ownerRevision, revision: sharedContribution.value.title.revision, confirmed: true });
+  const archivedMovie = await browserMember.call(`library/${movie.value.title.id}/contribution/remove`, { expectedContextRevision: memberRevision, revision: ownerRemoved.value.title.revision, confirmed: true });
+  check(ownerRemoved.status === 200 && archivedMovie.status === 200 && archivedMovie.value.status === "archived", "Browser contexts could not confirm contributor removal and final archive.");
+  const missingRestoreRevision = await browserOwner.call(`library/archive/${movie.value.title.id}/restore`, { expectedContextRevision: ownerRevision });
+  const staleRestore = await browserOwner.call(`library/archive/${movie.value.title.id}/restore`, { expectedContextRevision: ownerRevision, revision: archivedMovie.value.title.revision - 1 });
+  const restoredMovie = await browserOwner.call(`library/archive/${movie.value.title.id}/restore`, { expectedContextRevision: ownerRevision, revision: archivedMovie.value.title.revision });
+  check(missingRestoreRevision.status >= 400 && staleRestore.status >= 400 && restoredMovie.status === 200 && restoredMovie.value.title.id === movie.value.title.id, "Browser W08 did not reject missing/stale revisions or retain the title identity.");
   const ytSearch = await browserOwner.call("metadata/search", { expectedContextRevision: ownerRevision, source: "youtube", kind: "title", query: "browser fixture" });
   check(ytSearch.status === 200 && ytSearch.value.candidates.length === 1, "Browser provider journey did not receive a YouTube candidate through the adapter.");
   const foreignSelection = await browserMember.call(`metadata/pages/${ytSearch.value.handle}/candidates/AbCdEf12345`, { expectedContextRevision: memberRevision });
