@@ -149,7 +149,7 @@ check(kinoSearch.status === 200 && kinoReview.status === 200 && kinoSaved.status
   await browserOwner.page.getByRole("button", { name: "Save entry", exact: true }).click();
   await browserOwner.page.getByText(/Saved entry: HTTP fixture YouTube/).waitFor();
   await browserOwner.page.getByRole("button", { name: "Start fresh manual draft", exact: true }).click();
-  await browserOwner.page.getByLabel("Lookup source", { exact: true }).selectOption("kinopoisk");
+  await browserOwner.page.getByLabel("Lookup source").selectOption("kinopoisk");
   await browserOwner.page.getByLabel("Lookup query", { exact: true }).fill("browser fixture");
   await browserOwner.page.getByRole("button", { name: "Search metadata", exact: true }).click();
   await browserOwner.page.getByRole("button", { name: "Choose HTTP fixture Kinopoisk", exact: true }).click();

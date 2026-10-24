@@ -12,8 +12,8 @@ it("M01–M04: HTTP UI applies a provider review and explicitly saves it through
   const requests: Array<{ path: string; body: Record<string, unknown> }> = [];
   globalThis.fetch = vi.fn(async (path: string, init: RequestInit) => {
     requests.push({ path, body: JSON.parse(String(init.body)) });
-    if (path === "/v1/metadata/search") return reply({ handle: "review-1", source: "youtube", providerId: "AbCdEf12345", draft: { title: "HTTP YouTube", contentType: "youtube", durationSeconds: 120, numberingStyle: "none", genres: ["Comedy"], watchUrl: "https://youtube.example/watch", sourceUrl: "https://youtube.example/source", coverUrl: null }, expiresAt: Date.now() + 60000, notice: "Review imported fields.", context: { revision: 4 } });
-    if (path === "/v1/metadata/reviews/review-1/save") return reply({ status: "created", title: { id: "title-1", groupId: "group-1", revision: 1, archived: false, title: "HTTP YouTube", contentType: "youtube", durationSeconds: 120, numberingStyle: "none", genres: ["Comedy"], moods: ["funny"], watchUrl: null, sourceUrl: null, coverUrl: null, contributors: [], history: [], personal: null, canEdit: true, canRemove: true, canRefresh: true, canRestore: false }, context: { revision: 4 } });
+    if (path === "/v1/metadata/search") return reply({ handle: "review-1", source: "youtube", providerId: "AbCdEf12345", draft: { title: "HTTP YouTube", contentType: "youtube", duration: { seconds: 120, meaning: "exact" }, numberingStyle: "none", genres: ["Comedy"], watchUrl: "https://youtube.example/watch", sourceUrl: "https://youtube.example/source", coverUrl: null }, expiresAt: Date.now() + 60000, notice: "Review imported fields.", context: { revision: 4 } });
+    if (path === "/v1/metadata/reviews/review-1/save") return reply({ status: "created", title: { id: "title-1", groupId: "group-1", revision: 1, archived: false, title: "HTTP YouTube", contentType: "youtube", duration: { seconds: 120, meaning: "exact" }, numberingStyle: "none", genres: ["Comedy"], moods: ["funny"], watchUrl: null, sourceUrl: null, coverUrl: null, contributors: [], history: [], personal: null, canEdit: true, canRemove: true, canRefresh: true, canRestore: false }, context: { revision: 4 } });
     throw new Error(`unexpected ${path}`);
   }) as typeof fetch;
   const service = createHttpService(), identity = { current: service.context.initialIdentity };
@@ -28,7 +28,7 @@ it("M01–M04: HTTP UI applies a provider review and explicitly saves it through
   fireEvent.click(panel.getByRole("button", { name: "Save entry" }));
   await wait();
   expect(requests.map(request => request.path)).toEqual(["/v1/metadata/search", "/v1/metadata/reviews/review-1/save"]);
-  expect(requests[1].body).toMatchObject({ title: "HTTP YouTube", moods: ["funny"], expectedContextRevision: 4 });
+  expect(requests[1].body).toMatchObject({ title: "HTTP YouTube", durationSeconds: 120, moods: ["funny"], expectedContextRevision: 4 });
   expect(panel.getByText(/Saved entry: HTTP YouTube/)).toBeTruthy();
 });
 
