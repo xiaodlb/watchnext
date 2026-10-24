@@ -13,7 +13,7 @@ export default function HomePage() {
         <AccountForm operation="login" />
         <p className="auth-links"><Link href="/recover">Forgot password?</Link> <span aria-hidden="true">·</span> <Link href="/register">Create an account</Link></p>
       </section>
-      <p className="auth-footer"><Link href="/group">Open a legacy group</Link></p>
+      <p className="auth-footer"><Link href="/group">Open a legacy group</Link> <span aria-hidden="true">·</span> <Link href="/http">HTTP workspace</Link></p>
     </div>
   );
 }

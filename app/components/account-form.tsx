@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 export function AccountForm({ operation }: { operation: "register" | "login" | "logout" | "recover" }) {
   const [pending, setPending] = useState(false), [message, setMessage] = useState("");
   const [recovery, setRecovery] = useState<string | null>(null), [copyMessage, setCopyMessage] = useState("");
   const feedback = useRef<HTMLParagraphElement>(null), busy = useRef(false);
-  useEffect(() => { if (message) feedback.current?.focus(); }, [message]);
+  // Feedback must receive focus in the same commit that makes the alert observable.
+  useLayoutEffect(() => { if (message) feedback.current?.focus(); }, [message]);
   useEffect(() => {
     if (recovery) document.getElementById("recovery-code")?.focus();
     const discard = () => { const field = document.getElementById("recovery-code"); if (field instanceof HTMLInputElement) field.value = ""; setRecovery(null); };
