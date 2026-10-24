@@ -1,3 +1,6 @@
+import { DatabaseSync } from "node:sqlite";
+import { createGroup as createLegacyGroup } from "../../lib/groups.ts";
+
 export async function journeys(f, step, check) {
   const { origin, secrets } = f, report = [], state = {};
   const read = (sql, ...args) => f.db.prepare(sql).all(...args);
@@ -5,9 +8,15 @@ export async function journeys(f, step, check) {
   const snapshot = group => JSON.stringify(["titles", "contributors", "progress", "ratings", "notes"].map(table => read(`SELECT * FROM ${table} WHERE group_id=? ORDER BY rowid`, group)));
   const detail = (page, id) => page.goto(`${origin}/watchlist/${id}`);
   async function credentials(context) { for (const cookie of await context.cookies()) if (!secrets.includes(cookie.value)) if(cookie.name !== "watchnext_access_mode") secrets.push(cookie.value); }
-  async function createGroup(page, name) {
-    await page.goto(origin); await page.getByLabel("Group name", { exact: true }).fill(name); await page.getByRole("button", { name: "Create group", exact: true }).press("Enter");
-    const input = page.getByLabel("Invite link", { exact: true }); await input.waitFor(); const invite = await input.inputValue(); secrets.push(invite.split("/").at(-1)); return invite;
+  async function createGroup(name) {
+    // The current public root is the account sign-in screen. Legacy groups have
+    // no public creation screen, so create their invitation through the real
+    // domain service as isolated fixture setup. Joining and using the group
+    // below still happen through the shipped browser UI.
+    const writer = new DatabaseSync(f.path); let invite;
+    try { invite = createLegacyGroup(writer, name, origin).inviteUrl; }
+    finally { writer.close(); }
+    secrets.push(invite.split("/").at(-1)); return invite;
   }
   async function join(page, invite) { await page.goto(invite); await page.waitForURL("**/group").catch(() => { throw new Error("Expected: ordinary invite redirects to group; observed: group redirect missing"); }); await credentials(page.context()); }
   async function profile(page, name, color) {
@@ -40,7 +49,7 @@ export async function journeys(f, step, check) {
     const names = { movie: `Journey funny film ${width}`, video: `Journey funny short ${width}`, series: `Journey exciting series ${width}`, anime: `Journey dark anime ${width}`, private: `Private other group ${width}` };
     let movie, video, series, anime, group, otherGroup, foreignId;
     await step(`${width}: create shared group/profiles and four manual types`, async () => {
-      const invite = await createGroup(a, `Journey group ${width}`); await join(a, invite); await join(b, invite); await profile(a, "Anna", "Blue"); await profile(b, "Max", "Teal");
+      const invite = await createGroup(`Journey group ${width}`); await join(a, invite); await join(b, invite); await profile(a, "Anna", "Blue"); await profile(b, "Max", "Teal");
       group = read("SELECT id FROM groups WHERE name=?", `Journey group ${width}`)[0].id;
       movie = await manual(a, names.movie, "movie", 24, "Funny"); video = await manual(a, names.video, "youtube", 18, "Funny"); series = await manual(a, names.series, "series", 20, "Exciting", "season_episode"); anime = await manual(a, names.anime, "anime", 23, "Dark", "continuous");
       check(await manual(b, names.movie, "movie", 24, "Funny", null, "Add my name to this title") === movie, "Second contribution confirms the same persisted title ID");
@@ -74,7 +83,7 @@ export async function journeys(f, step, check) {
       await detail(a, movie); await a.reload(); check(await a.getByLabel("Stopped at", { exact: true }).inputValue() === "10:00", "Anna timestamp persisted through archive/restore"); await detail(b, movie); await b.reload(); check(await b.getByLabel("Rating (1–10)").inputValue() === "6", "Max rating persisted independently");
     });
     await step(`${width}: true cross-group reads/actions, stale profile and server restart`, async () => {
-      const invite = await createGroup(foreign, `Other group ${width}`); await join(foreign, invite); await profile(foreign, "Cara", "Purple"); foreignId = await manual(foreign, names.private, "movie", 12, "Relaxing"); otherGroup = read("SELECT id FROM groups WHERE name=?", `Other group ${width}`)[0].id;
+      const invite = await createGroup(`Other group ${width}`); await join(foreign, invite); await profile(foreign, "Cara", "Purple"); foreignId = await manual(foreign, names.private, "movie", 12, "Relaxing"); otherGroup = read("SELECT id FROM groups WHERE name=?", `Other group ${width}`)[0].id;
       await detail(foreign, foreignId); let captured; const listener = request => { if (request.method() === "POST" && new URL(request.url()).pathname === `/watchlist/${foreignId}`) captured = { headers: request.headers(), body: request.postDataBuffer() }; }; foreign.on("request", listener);
       const panel = foreign.getByRole("region", { name: "Your rating", exact: true }); await panel.getByLabel("Rating (1–10)").fill("5"); await submit(panel, "Save rating", "Your whole-title rating is saved."); foreign.off("request", listener); check(Boolean(captured?.body), "Captured actual shipped Next action request"); const before = snapshot(otherGroup);
       await detail(a, foreignId); await a.getByRole("heading", { name: "Title unavailable", exact: true }).waitFor(); check(!(await a.locator("main").textContent()).includes(names.private), "Known foreign ID cannot reveal private title");

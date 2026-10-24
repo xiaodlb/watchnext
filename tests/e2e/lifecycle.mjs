@@ -47,7 +47,18 @@ export async function createFixture() {
     const ended = new Promise(done => child.once("exit", done)); child.kill();
     let timer; try { await Promise.race([ended, new Promise((_, fail) => { timer = setTimeout(() => fail(new Error("Owned child failed to stop within 10 seconds")), 10000); })]); } finally { clearTimeout(timer); }
   };
-  const files = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(join(directory, entry.name)) : [join(directory, entry.name)]);
+  // Other isolated test workers may finish their own production build while
+  // this audit runs. A file observed during directory enumeration can then be
+  // gone before readFileSync. It is not part of this fixture and must not turn
+  // a successful fixture cleanup into an ENOENT failure.
+  const files = directory => {
+    try {
+      return readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(join(directory, entry.name)) : [join(directory, entry.name)]);
+    } catch (error) {
+      if (error?.code === "ENOENT") return [];
+      throw error;
+    }
+  };
   const fixture = {
     root, path, origin, secrets, sentinelRoot, get db() { return db; }, get browser() { return browser; }, get cleanupComplete() { return cleanupComplete; },
     initialize() {
@@ -86,7 +97,10 @@ export async function createFixture() {
     async audit() {
       if (secrets.some(secret => output.includes(secret))) throw new Error("Raw synthetic credential found in captured routine output");
       for (const file of [...(existsSync(join(repo, ".next")) ? files(join(repo, ".next")) : []), ...files(root)]) {
-        const content = readFileSync(file); if (secrets.some(secret => content.includes(Buffer.from(secret)))) throw new Error("Raw synthetic credential found in generated artifacts/database");
+        let content;
+        try { content = readFileSync(file); }
+        catch (error) { if (error?.code === "ENOENT") continue; throw error; }
+        if (secrets.some(secret => content.includes(Buffer.from(secret)))) throw new Error("Raw synthetic credential found in generated artifacts/database");
       }
       for (const { file, original } of sentinels) if (!readFileSync(file).equals(original)) throw new Error("Unrelated normal/demo/file sentinel changed");
       if (existsSync(join(root, "normal-default"))) throw new Error("Unexpected fallback to default storage");

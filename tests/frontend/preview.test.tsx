@@ -54,6 +54,6 @@ it("only the explicit mock path gets isolated navigation; production prefixes ke
   expect(screen.getAllByRole("link").map(link => link.getAttribute("href"))).toEqual(["/mock", "/"]);
   for (const pathname of ["/", "/watchlist", "/mockery"]) {
     route.pathname = pathname; rendered.rerender(<Navigation />);
-    expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeTruthy(); expect(screen.getAllByRole("link")).toHaveLength(5);
+    expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeTruthy(); expect(screen.getAllByRole("link")).toHaveLength(6);
   }
 });
