@@ -1,4 +1,6 @@
-export type ContextIdentity = Readonly<{ mode: "mock"; instance: string; revision: number }>;
+/** A context revision is stale-intent protection, never authority.  HTTP authority
+ * comes only from the same-origin session cookie. */
+export type ContextIdentity = Readonly<{ mode: "mock" | "http"; instance: string; revision: number }>;
 export type FieldErrors = Readonly<Partial<Record<"mode" | "scenario" | "context" | "username" | "password" | "confirmation" | "proof" | PersonalField | PickerField, string>>>;
 export type ServiceFailure = Readonly<{
   kind: "failure";
@@ -18,7 +20,7 @@ export type MockScenario = "ready" | "slow" | "unavailable";
 export type RequestOptions = Readonly<{ signal?: AbortSignal; scenario?: MockScenario }>;
 export type MockContext = Readonly<{
   identity: ContextIdentity;
-  label: "Synthetic workspace";
+  label: "Synthetic workspace" | "HTTP memory workspace";
   account: AccountSummary | null;
   group: GroupSummary | null;
 }>;
@@ -28,7 +30,7 @@ export interface ContextService {
   reset(expected: ContextIdentity, options?: Pick<RequestOptions, "signal">): Promise<ServiceResult<MockContext>>;
 }
 export interface FrontendService {
-  readonly mode: "mock";
+  readonly mode: "mock" | "http";
   readonly context: ContextService;
   readonly accounts: AccountService;
   readonly groups: GroupService;

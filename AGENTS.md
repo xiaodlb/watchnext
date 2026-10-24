@@ -135,3 +135,5 @@ The frontend-only authorization originally named #41/#42. #42 is now split into 
 ## Communication
 
 Keep updates short and use plain language. Ask one question at a time when user input is needed, and distinguish verified results from assumptions or proposed decisions.
+
+- `_docs/http-ui.md` - explicit #47 HTTP-memory UI entry, typed adapter and request map.

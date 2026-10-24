@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ContextIdentity, FrontendService, MockContext, MockScenario, PrivateDisclosure, ServiceResult } from "../../frontend/service/contracts";
 import styles from "./preview.module.css";
 type Screen = "entry" | "register" | "signin" | "recover" | "reveal" | "account";
-export function MockAccounts({ service, identity, scenario, changed, departed }: { service: FrontendService; identity: { current: ContextIdentity }; scenario: MockScenario; changed: (context: MockContext | undefined) => void; departed?: () => void }) {
+export function MockAccounts({ service, identity, scenario, real: _real, changed, departed }: { service: FrontendService; identity: { current: ContextIdentity }; scenario: MockScenario; real?: boolean; changed: (context: MockContext | undefined) => void; departed?: () => void }) {
   const [screen, setScreen] = useState<Screen>("entry");
   const [account, setAccount] = useState<MockContext["account"]>(null);
   const [disclosure, setDisclosure] = useState<PrivateDisclosure>();
@@ -39,7 +39,7 @@ export function MockAccounts({ service, identity, scenario, changed, departed }:
     else { changed(result.value); setAccount(result.value.account); setScreen(result.value.account ? "account" : "entry"); setMessage(action === "signout" ? "Signed out of the synthetic account." : "Synthetic account context ready."); }
   }
   const formScreen = screen === "register" || screen === "signin" || screen === "recover";
-  return <section className={styles.card} aria-labelledby="mock-accounts"><h2 id="mock-accounts">Synthetic accounts</h2><p>Temporary sample credentials only. No real authentication. Seeded sign-ins: Demo.Owner or Demo.Viewer / synthetic password. These fixture credentials are a synthetic demo, not security evidence. Seeded memberships are read-only samples.</p>
+  return <section className={styles.card} aria-labelledby="mock-accounts"><h2 id="mock-accounts">{_real ? "Accounts" : "Synthetic accounts"}</h2><p>{_real ? "Register, sign in, recover, or sign out through the current same-origin HTTP session." : "Temporary sample credentials only. No real authentication. Seeded sign-ins: Demo.Owner or Demo.Viewer / synthetic password. These fixture credentials are a synthetic demo, not security evidence. Seeded memberships are read-only samples."}</p>
     <nav className={styles.controls} aria-label="Preview account views"><button className={`button ${styles.secondary}`} onClick={() => navigate("entry")}>Account entry</button><button className={`button ${styles.secondary}`} onClick={() => navigate("register")}>Register</button><button className={`button ${styles.secondary}`} onClick={() => navigate("signin")}>Sign in</button><button className={`button ${styles.secondary}`} onClick={() => navigate("recover")}>Recover account</button></nav>
     {screen === "entry" && <><p>Register a temporary account, sign in to a sample, or recover using its current code.</p><button className="button" disabled={pending} onClick={() => void run("read")}>Read account context</button></>}
     {formScreen && <form ref={form} className={styles.form} onSubmit={event => { event.preventDefault(); void run(screen, new FormData(event.currentTarget)); }}>
