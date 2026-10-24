@@ -59,6 +59,17 @@ it("empty Mine differs from All and provides real shared-list/add destinations",
 it("legacy and archive never offer authenticated Mine controls, while safe notices remain visible",()=>{
  const{rerender}=render(<WatchlistContent view={{activeMemberId:"anna",items:[fixture],filterNotice:"Added by me is available in account groups only. Showing your shared list."}}/>);expect(screen.queryByRole("navigation",{name:"Watchlist filter"})).toBeNull();expect(screen.getByRole("status").textContent).toContain("account groups only");rerender(<WatchlistContent archived view={{activeMemberId:"anna",canFilter:true,filter:"mine",items:[fixture]}}/>);expect(screen.queryByRole("navigation",{name:"Watchlist filter"})).toBeNull();expect(screen.getByRole("heading",{name:"Archive"})).toBeTruthy();
 });
+it("filters the already-authorized library by type without changing the server-backed All or Mine selection",()=>{
+ const youtube: WatchlistItem = { ...fixture, id:"video", title:"Shared video", contentType:"youtube" };
+ render(<WatchlistContent view={{activeMemberId:"anna",canFilter:true,filter:"all",items:[fixture,youtube]}}/>);
+ expect(screen.getByText("2 titles")).toBeTruthy();
+ fireEvent.click(screen.getByRole("button",{name:"YouTube"}));
+ expect(screen.getByText("Shared video")).toBeTruthy();
+ expect(screen.queryByText("Shared film")).toBeNull();
+ expect(screen.getByRole("link",{name:"Added by me"}).getAttribute("href")).toBe("/watchlist?filter=mine");
+ fireEvent.click(screen.getByRole("button",{name:"All"}));
+ expect(screen.getByText("Shared film")).toBeTruthy();
+});
 it("storage retry keeps a requested Mine mode without replacing the current URL",()=>{
  render(<WatchlistLoadError filter="mine"/>);expect(screen.getByText("Your Added by me request is kept when you retry.")).toBeTruthy();fireEvent.click(screen.getByRole("button",{name:"Try again"}));expect(refresh).toHaveBeenCalledTimes(1);
 });

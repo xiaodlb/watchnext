@@ -21,7 +21,9 @@
     "db:snapshot": "node scripts/db/snapshot.mjs",
     "db:verify:backup": "node tests/fixtures/backup-check.mjs",
     "typecheck": "tsc --noEmit",
-    "metadata:maintain": "node --env-file-if-exists=.env.local scripts/metadata-maintain.mjs"
+    "metadata:maintain": "node --env-file-if-exists=.env.local scripts/metadata-maintain.mjs",
+    "test:mock": "node tests/fixtures/mock-foundation-browser-check.mjs",
+    "contract:verify": "node scripts/verify-openapi.mjs"
   },
   "engines": {
     "node": ">=24.15.0 <25"

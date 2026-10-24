@@ -1,8 +1,8 @@
 # WatchNext — Project Scope
 
-## Graded iteration — first-step planning only
+## Graded iteration — frontend authorization after initial planning
 
-The current app is complete through closed issues #1–#40 and [final independent QA](https://github.com/xiaodlb/watchnext/issues/40#issuecomment-6263933927), baseline `441fcaae660e273d6fc373f8757be562d9139b78` / tag `graded-baseline-2026-10-19`. [Specification](specification.md) consolidates its current requirements. The user authorized the first graded step: [plan and staged backlog](graded-mvp.md), reference/evidence/workflow documents and issues only. Thirteen `mvp` issues plus optional `post-mvp` #52 are planned; no implementation is started. The new teacher workflow gives QA regression augmentation and PASS-only closure for new `mvp`/`user-test-bug` issues, scoped in [process](process.md). Earlier run authorization below is historical and does not start this new backlog.
+The current app is complete through closed issues #1–#40 and [final independent QA](https://github.com/xiaodlb/watchnext/issues/40#issuecomment-6263933927), baseline `441fcaae660e273d6fc373f8757be562d9139b78` / tag `graded-baseline-2026-10-19`. [Specification](specification.md) consolidates its current requirements. The user authorized the first graded step: [plan and staged backlog](graded-mvp.md), reference/evidence/workflow documents and issues only. At that initial planning step, thirteen `mvp` issues plus optional `post-mvp` #52 were created without implementation. The new teacher workflow gives QA regression augmentation and PASS-only closure for new `mvp`/`user-test-bug` issues, scoped in [process](process.md). Earlier run authorization below is historical and does not start this new backlog. The later frontend request and supplied Lovable preview now authorize #41 documentation and #42 full typed mock frontend only, after prerequisite QA. [Operation inventory](operation-inventory.md) and [reference provenance](design-references.md) preserve the full baseline. Later contract/backend/ORM work remains planned, not implied by this request.
 
 ## Authorized enhancement — October 18, 2026
 
