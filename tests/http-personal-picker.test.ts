@@ -80,6 +80,23 @@ it("writes only the current actor's episode, timestamp, completion, rating and n
   expect(cleared.personal).toMatchObject({ timestampSeconds: null, completed: true, rating: null, note: null });
 });
 
+it("uses the shared note normalization and rejects NUL without replacing the saved record", async () => {
+  const { owner } = await groupWithTwoMembers();
+  const movie = await (await call("library/manual", draft("Normalized HTTP note", 1500), owner)).json() as any;
+  const first = await call(`library/${movie.title.id}/note`, { expectedContextRevision: 2, note: "  First\r\n  second\r " }, owner, "PUT");
+  expect(first.status).toBe(200);
+  expect((await first.json()).record.note).toBe("First\n  second");
+
+  const second = await call(`library/${movie.title.id}/note`, { expectedContextRevision: 2, note: "  Bare\rCR stays internal  " }, owner, "PUT");
+  expect(second.status).toBe(200);
+  expect((await second.json()).record.note).toBe("Bare\nCR stays internal");
+
+  const rejected = await call(`library/${movie.title.id}/note`, { expectedContextRevision: 2, note: "must\0not save" }, owner, "PUT");
+  expect(rejected.status).toBeGreaterThanOrEqual(400);
+  const detail = await (await call(`library/${movie.title.id}`, undefined, owner, "GET")).json() as any;
+  expect(detail.personal.note).toBe("Bare\nCR stays internal");
+});
+
 it("runs ranked picker cycles from fresh memory projections without picker history writes", async () => {
   const { owner, member } = await groupWithTwoMembers();
   const longest = await (await call("library/manual", draft("Longest funny", 1500), owner)).json() as any;

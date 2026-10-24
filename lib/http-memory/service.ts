@@ -9,6 +9,7 @@ import type { Candidate, LookupQuery, MetadataItem, MetadataProvider, ProviderNa
 import { candidateIdentity, createCycleStore, cycleLifetimeMs, fingerprint } from "../picker/cycle";
 import { rankCandidates } from "../picker/ranking";
 import type { RankingInput, RankedCandidate } from "../picker/ranking";
+import { inspectNoteDraft } from "../note-state";
 
 type Account={id:string;username:string;key:string;password_version:number;password_algorithm:string;password_hash:string;password_salt:string;password_n:number;password_r:number;password_p:number;password_maxmem:number;recovery:string};
 type Session={token:string;accountId:string;expires:number;revoked:boolean;revision:number;groupId:string|null};
@@ -116,7 +117,8 @@ function episodeUpdate(record:PersonalRecord,title:MemoryTitle,input:Record<stri
   Object.assign(record,{numberingStyle:title.numberingStyle,positionState:position,nextSeason:seasonal?season as number:null,nextEpisode:episode as number});
 }
 function timestampUpdate(record:PersonalRecord,title:MemoryTitle,input:Record<string,unknown>){if(title.contentType!=="movie"&&title.contentType!=="youtube")throw new AuthError("Timestamps are available only for movies and videos.");const duration=title.durationSeconds;if(typeof duration!=="number"||!integer(duration,1,86400)||!integer(input.timestampSeconds,0,duration))throw new AuthError("Use a whole timestamp from zero through the current duration.");record.timestampSeconds=input.timestampSeconds as number;}
-function noteValue(value:unknown){if(typeof value!=="string")throw new AuthError("Enter a plain-text note.");const trimmed=value.trim();if([...trimmed].length>2000)throw new AuthError("Notes can contain at most 2000 characters.");return trimmed||null;}
+/** Keep the HTTP-memory implementation byte-for-byte compatible with the established note contract. */
+function noteValue(value:unknown){if(typeof value!=="string")throw new AuthError("Enter a plain-text note.");const result=inspectNoteDraft(value);if(result.error)throw new AuthError(result.error);return result.normalized||null;}
 function pickerInput(input:Record<string,unknown>):PickerInput{if(!Array.isArray(input.viewerIds)||!input.viewerIds.every(value=>typeof value==="string")||!integer(input.availableMinutes,1,1440)||typeof input.mood!=="string"||typeof input.rewatches!=="boolean")throw new AuthError("Choose viewers, whole available minutes, one mood, and a rewatch setting.");return{viewerIds:[...input.viewerIds as string[]].sort(),availableMinutes:input.availableMinutes as number,mood:input.mood,rewatches:input.rewatches};}
 function intent(input:Record<string,unknown>){if(typeof input.intentId!=="string"||!input.intentId.trim()||[...input.intentId].length>128)throw new AuthError("A bounded logical request ID is required.");return input.intentId;}
 function pickerAuthority(request:Request,c:LibraryContext){if(c.mode==="account"){const {raw,s}=accountSession(request);return fingerprint(["account",hash(raw),c.group.id,c.member?.id??null,s.revision]);}const {raw,s}=legacySession(request);return fingerprint(["legacy",hash(raw),c.group.id,c.member?.id??null,s.revision]);}
