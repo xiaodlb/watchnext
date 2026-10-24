@@ -135,7 +135,27 @@ try {
   const kinoSearch = await browserOwner.call("metadata/search", { expectedContextRevision: ownerRevision, source: "kinopoisk", kind: "title", query: "browser fixture" });
   const kinoReview = await browserOwner.call(`metadata/pages/${kinoSearch.value.handle}/candidates/424242`, { expectedContextRevision: ownerRevision });
   const kinoSaved = await browserOwner.call(`metadata/reviews/${kinoReview.value.handle}/save`, { expectedContextRevision: ownerRevision, moods: ["funny"], numberingStyle: "none" });
-  check(kinoSearch.status === 200 && kinoReview.status === 200 && kinoSaved.status === 200 && kinoSaved.value.status === "created", "Browser Kinopoisk candidate/review/save did not use the server adapter.");
+check(kinoSearch.status === 200 && kinoReview.status === 200 && kinoSaved.status === 200 && kinoSaved.value.status === "created", "Browser Kinopoisk candidate/review/save did not use the server adapter.");
+
+  // #47: drive the mounted /http client controls, not raw page-side fetch, through M01–M04.
+  await browserOwner.page.goto(`${origin}/http`);
+  await browserOwner.page.getByLabel("Lookup query", { exact: true }).fill("browser fixture");
+  await browserOwner.page.getByRole("button", { name: "Search metadata", exact: true }).click();
+  await browserOwner.page.getByRole("button", { name: "Choose HTTP fixture YouTube", exact: true }).click();
+  await browserOwner.page.getByLabel("Entry title", { exact: true }).waitFor();
+  for (let tries = 0; tries < 60 && await browserOwner.page.getByLabel("Entry title", { exact: true }).inputValue() !== "HTTP fixture YouTube"; tries++) await new Promise(done => setTimeout(done, 50));
+  check(await browserOwner.page.getByLabel("Entry title", { exact: true }).inputValue() === "HTTP fixture YouTube", "Mounted HTTP UI did not apply the selected YouTube review.");
+  const funny = browserOwner.page.getByRole("checkbox", { name: "funny", exact: true }); if (!await funny.isChecked()) await funny.check();
+  await browserOwner.page.getByRole("button", { name: "Save entry", exact: true }).click();
+  await browserOwner.page.getByText(/Saved entry: HTTP fixture YouTube/).waitFor();
+  await browserOwner.page.getByRole("button", { name: "Start fresh manual draft", exact: true }).click();
+  await browserOwner.page.getByLabel("Lookup source", { exact: true }).selectOption("kinopoisk");
+  await browserOwner.page.getByLabel("Lookup query", { exact: true }).fill("browser fixture");
+  await browserOwner.page.getByRole("button", { name: "Search metadata", exact: true }).click();
+  await browserOwner.page.getByRole("button", { name: "Choose HTTP fixture Kinopoisk", exact: true }).click();
+  for (let tries = 0; tries < 60 && await browserOwner.page.getByLabel("Entry title", { exact: true }).inputValue() !== "HTTP fixture Kinopoisk"; tries++) await new Promise(done => setTimeout(done, 50));
+  check(await browserOwner.page.getByLabel("Entry title", { exact: true }).inputValue() === "HTTP fixture Kinopoisk", "Mounted HTTP UI did not apply the selected Kinopoisk review.");
+  console.log("HTTP memory UI journey passed: mounted /http applies selected YouTube/Kinopoisk reviews and sends explicit save through the typed adapter.");
   await browserOwner.context.close(); await browserMember.context.close();
 
   const owner = jar(), member = jar(), outsider = jar(), legacy = jar();
