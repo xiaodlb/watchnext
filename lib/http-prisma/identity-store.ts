@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { PrismaClient } from "@prisma/client";
-import type { GroupContext, Identity, IdentityGroupRepository } from "../repositories/contracts";
+import type { GroupContext, Identity, IdentityGroupOperation, IdentityGroupRepository } from "../repositories/contracts";
 
 export type PrismaAccount = {
   id: string; username: string; key: string; password_version: number; password_algorithm: string;
@@ -57,6 +57,14 @@ const visibleColor = (value: string) => hexToPalette.get(value.toLowerCase()) ??
 
 /** Portable #48 contract implementation; it exposes no Prisma/SQLite value to callers. */
 export class PrismaIdentityGroupRepository implements IdentityGroupRepository {
+  async execute(operation: IdentityGroupOperation): Promise<Response> {
+    // Load the route implementation lazily so this portable contract remains
+    // the one composition point and cannot accidentally expose a Prisma
+    // client to the HTTP service.
+    const { executePrismaIdentityGroupOperation } = await import("./identity-operations");
+    return executePrismaIdentityGroupOperation(operation);
+  }
+
   async readIdentity(sessionHash: string, at: number): Promise<Identity | null> {
     const session = await prismaIdentityClient().accountSession.findUnique({ where: { tokenHash: sessionHash }, include: { account: true } });
     if (!session || session.revokedAt !== null || Number(session.expiresAt) <= at) return null;

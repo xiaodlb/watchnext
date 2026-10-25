@@ -118,3 +118,35 @@ it("keeps memory transient while Prisma preserves recovery logout and duplicate-
   const db = new DatabaseSync(database);
   try { expect(db.prepare("SELECT count(*) AS count FROM accounts").get()).toMatchObject({ count: 1 }); expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]); } finally { db.close(); }
 });
+
+it("keeps every #49 route's invalid method/body parity and atomically rejects a same-revision race", async () => {
+  const database = setupPrisma();
+  const routes = ["context", "auth/register", "auth/login", "auth/logout", "auth/recovery", "groups", "groups/current", "groups/pending/join", "groups/current/members/remove", "groups/current/invitations/rotate", "invitations/resolve", "context/group-selection", "context/mode", "legacy/groups", "legacy/groups/current/profiles", "legacy/context/profile"];
+  for (const path of routes) {
+    const prisma = await handleMemory(request(path, undefined, undefined, "GET"), path.split("/"));
+    const saved = { memory: process.env.WATCHNEXT_HTTP_MEMORY, repository: process.env.WATCHNEXT_HTTP_REPOSITORY, isolated: process.env.WATCHNEXT_HTTP_PRISMA_ISOLATED, url: process.env.WATCHNEXT_HTTP_PRISMA_DATABASE_URL };
+    process.env.WATCHNEXT_HTTP_MEMORY = "1"; delete process.env.WATCHNEXT_HTTP_REPOSITORY; delete process.env.WATCHNEXT_HTTP_PRISMA_ISOLATED; delete process.env.WATCHNEXT_HTTP_PRISMA_DATABASE_URL;
+    const memory = await handleMemory(request(path, undefined, undefined, "GET"), path.split("/"));
+    for (const [name, value] of Object.entries({ WATCHNEXT_HTTP_MEMORY: saved.memory, WATCHNEXT_HTTP_REPOSITORY: saved.repository, WATCHNEXT_HTTP_PRISMA_ISOLATED: saved.isolated, WATCHNEXT_HTTP_PRISMA_DATABASE_URL: saved.url })) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
+    expect(prisma.status).toBe(memory.status);
+  }
+  const extra = new Request(`${origin}/v1/auth/register`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify({ username: "Extra.Fields", password, confirmation: password, untrusted: true }) });
+  expect((await handleMemory(extra, ["auth", "register"])).status).toBeGreaterThanOrEqual(400);
+  const malformed = new Request(`${origin}/v1/auth/register`, { method: "POST", headers: { origin, "content-type": "application/json" }, body: "{" });
+  expect((await handleMemory(malformed, ["auth", "register"])).status).toBeGreaterThanOrEqual(400);
+
+  const registered = await handleMemory(request("auth/register", { username: "Race.Owner", password, confirmation: password }), ["auth", "register"]);
+  const session = cookieOf(registered, "watchnext_account_session");
+  const [first, second] = await Promise.all([
+    handleMemory(request("groups", { expectedContextRevision: 1, name: "First race group" }, session), ["groups"]),
+    handleMemory(request("groups", { expectedContextRevision: 1, name: "Second race group" }, session), ["groups"]),
+  ]);
+  expect([first.status, second.status].sort()).toEqual([200, 409]);
+  const db = new DatabaseSync(database);
+  try {
+    expect(db.prepare("SELECT count(*) AS count FROM groups WHERE access_mode='account'").get()).toMatchObject({ count: 1 });
+    expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
+  } finally { db.close(); }
+});

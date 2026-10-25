@@ -16,11 +16,11 @@ The `ISOLATED` flag is a deliberate #49 guard. It prevents accidentally treating
 
 ## Persisted scope and invariants
 
-Prisma maps ordinary reads and writes for accounts, password/recovery digests, account sessions, account groups, members/memberships, invitations, pending invitation intents, legacy group sessions and legacy profiles. The adapter reconstructs a request-local identity/group projection before the route runs and commits it in one Prisma transaction afterwards. The process lock is only a local contention guard; SQLite's foreign keys, checks and native membership/context triggers remain active database protections.
+Prisma maps ordinary reads and writes for accounts, password/recovery digests, account sessions, account groups, members/memberships, invitations, pending invitation intents, legacy group sessions and legacy profiles. Every selected A01–A05, G01–G08 and L01–L04 route enters the portable `IdentityGroupRepository.execute` contract and then the direct Prisma adapter; there is no request-local in-memory projection and no snapshot copy-back.
 
 The existing raw cookie value, password and recovery code are never stored as adapter values. Session, invitation and pending-intent keys are SHA-256 hashes already produced by the HTTP service. Credentials are returned only through the existing one-time response/cookie paths. The selected group, context revision, active membership status and invite generation are re-read from durable rows for every request; request fields remain stale-intent claims, never authority.
 
-Prisma's SQLite transaction is used for mapped account/group row mutations. The immutable native migrations and their `schema_migrations` ledger remain the schema authority. Existing `STRICT`, `CHECK`, foreign-key and trigger constraints are not reproduced in application code. `#49` does not use `prisma db push`, reset, or alter native migration files.
+Every mapped mutation uses a Prisma interactive SQLite transaction. The transaction connection enables foreign keys, a five-second busy timeout and secure delete before conditional revision/generation writes; duplicate, stale and replayed writes therefore fail without partially changing a row set. The immutable native migrations and their `schema_migrations` ledger remain the schema authority. Existing `STRICT`, `CHECK`, foreign-key and trigger constraints are not reproduced in application code. `#49` does not use `prisma db push`, reset, or alter native migration files.
 
 ## Isolated verification
 
@@ -33,7 +33,7 @@ pnpm prisma:identity:verify
 pnpm contract:verify
 ```
 
-`prisma:identity:verify` creates a new temporary database, applies the immutable native migrations there, starts the adapter in isolated mode, and removes its directory afterward. It covers account/group/legacy flow continuation across a clean service/client reset, pending invite persistence, recovery/logout denial, rotation/removal/new-generation rejoin, duplicate-account rollback and foreign-key integrity. It never reads, migrates, resets or attaches the normal/default/demo path, M-drive runtime, `.env.local` or a user server.
+`prisma:identity:verify` creates a new temporary database, applies the immutable native migrations there, starts the adapter in isolated mode, and removes its directory afterward. It covers account/group/legacy flow continuation across a clean service/client reset, pending invite persistence, recovery/logout denial, rotation/removal/new-generation rejoin, duplicate-account rollback and foreign-key integrity. The complete test suite adds malformed/extra-body and unknown-route parity plus controlled stale-revision races. It never reads, migrates, resets or attaches the normal/default/demo path, M-drive runtime, `.env.local` or a user server.
 
 ## Limits
 
