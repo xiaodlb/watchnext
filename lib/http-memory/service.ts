@@ -1,7 +1,8 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { AuthError, checkPassword, makePassword, passwordInput, security, usernameInput } from "../accounts/security";
 import { ProcessMemoryRepository } from "./repository";
-import { readPrismaIdentitySnapshot, resetPrismaIdentityForTests, writePrismaIdentitySnapshot, type PrismaIdentitySnapshot } from "../http-prisma/identity-store";
+import { resetPrismaIdentityForTests } from "../http-prisma/identity-store";
+import { handlePrismaIdentity } from "../http-prisma/identity-service";
 import { safeExternalUrl } from "../urls";
 import { youtubeProvider } from "../metadata/youtube-transport";
 import { kinopoiskUnofficialProvider } from "../metadata/kinopoisk-transport";
@@ -186,47 +187,10 @@ export function setHttpMemoryTransportsForTests(value:MemoryTransports|undefined
 export function resetHttpMemoryForTests(){repository().reset();transportOverride=undefined; void resetPrismaIdentityForTests();}
 
 
-const prismaLock = globalThis as typeof globalThis & { __watchnextPrismaIdentityLock?: Promise<void> };
 function prismaMode() { return process.env.WATCHNEXT_HTTP_REPOSITORY === "prisma"; }
-function replaceIdentityProjection(target: State, source: PrismaIdentitySnapshot) {
-  target.accounts = new Map(source.accounts.map((entry) => [entry.id, entry]));
-  target.byKey = new Map(source.accounts.map((entry) => [entry.key, entry.id]));
-  target.sessions = new Map(source.sessions.map((entry) => [entry.token, entry]));
-  target.groups = new Map(source.groups.map((entry) => [entry.id, { id: entry.id, name: entry.name, kind: entry.kind, owner: entry.owner, generation: entry.generation, members: new Map<string, Member>(), profiles: new Map<string, Member>() }]));
-  for (const entry of source.members) {
-    const group = target.groups.get(entry.groupId); if (!group) continue;
-    const member: Member = { id: entry.id, accountId: entry.accountId, name: entry.name, color: entry.color, active: entry.active, generation: entry.generation, removedAt: entry.removedAt };
-    (group.kind === "legacy" ? group.profiles : group.members).set(member.id, member);
-  }
-  target.invites = new Map(source.invites.map((entry) => [entry.token, entry]));
-  target.pending = new Map(source.pending.map((entry) => [entry.token, { groupId: entry.groupId, generation: entry.generation, expires: entry.expires, revision: entry.revision }]));
-  target.legacy = new Map(source.legacy.map((entry) => [entry.token, { groupId: entry.groupId, profileId: entry.profileId, revision: entry.revision }]));
-}
-function identityProjection(source: State): PrismaIdentitySnapshot {
-  return {
-    accounts: [...source.accounts.values()], sessions: [...source.sessions.values()],
-    groups: [...source.groups.values()].map((entry) => ({ id: entry.id, name: entry.name, kind: entry.kind, owner: entry.owner, generation: entry.generation })),
-    members: [...source.groups.values()].flatMap((group) => [...(group.kind === "legacy" ? group.profiles.values() : group.members.values())].map((member) => ({ id: member.id, groupId: group.id, accountId: member.accountId, name: member.name, color: member.color, active: member.active, generation: member.generation, removedAt: member.removedAt }))),
-    invites: [...source.invites.values()], pending: [...source.pending.entries()].map(([token, entry]) => ({ token, ...entry })),
-    legacy: [...source.legacy.entries()].map(([token, entry]) => ({ token, ...entry })),
-  };
-}
-async function serializedPrismaIdentity<T>(work: () => Promise<T>): Promise<T> {
-  const previous = prismaLock.__watchnextPrismaIdentityLock ?? Promise.resolve();
-  let release!: () => void;
-  prismaLock.__watchnextPrismaIdentityLock = new Promise<void>((resolve) => { release = resolve; });
-  await previous;
-  try { return await work(); } finally { release(); }
-}
 
-/** #49 composition seam. The repository is selected only by trusted server configuration, never request input. */
+/** #49 composition seam: selected identity/group routes execute direct Prisma repositories. */
 export async function handleMemory(request: Request, path: string[]): Promise<Response> {
-  if (!prismaMode()) return handleMemoryInProcess(request, path);
-  return serializedPrismaIdentity(async () => {
-    const current = state();
-    replaceIdentityProjection(current, await readPrismaIdentitySnapshot());
-    const result = await handleMemoryInProcess(request, path);
-    await writePrismaIdentitySnapshot(identityProjection(current));
-    return result;
-  });
+  if (prismaMode()) return handlePrismaIdentity(request, path);
+  return handleMemoryInProcess(request, path);
 }

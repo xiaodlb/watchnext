@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 import { PrismaClient } from "@prisma/client";
 import type { GroupContext, Identity, IdentityGroupRepository } from "../repositories/contracts";
 
@@ -27,12 +28,25 @@ const url = () => {
 
 type Cache = { url: string; client: PrismaClient };
 const globalCache = globalThis as typeof globalThis & { __watchnextPrismaIdentity?: Cache };
-function client() {
+export function prismaIdentityClient() {
   const databaseUrl = url();
   if (globalCache.__watchnextPrismaIdentity?.url === databaseUrl) return globalCache.__watchnextPrismaIdentity.client;
   const created = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
   globalCache.__watchnextPrismaIdentity = { url: databaseUrl, client: created };
   return created;
+}
+
+/** Adapter-local SQLite setup/ledger check. Prisma maps rows; it does not replace native guards. */
+export function verifyPrismaIdentitySQLiteAdapter() {
+  const databaseUrl = url();
+  const filename = decodeURIComponent(databaseUrl.slice("file:".length).split("?")[0]).replace(/^\/+([A-Za-z]:)/, "$1");
+  if (!filename || !/^[A-Za-z]:[\\/]|^\//.test(filename)) throw new Error("Prisma HTTP identity mode requires an absolute owned file path.");
+  const db = new DatabaseSync(filename, { open: false });
+  try {
+    db.open(); db.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON;");
+    const rows = db.prepare("SELECT version FROM schema_migrations ORDER BY version").all() as Array<{ version: string }>;
+    if (rows.length !== 5 || rows.map((row) => row.version).join(",") !== "0001,0002,0003,0004,0005") throw new Error("Prisma HTTP identity database must have the immutable native migration ledger.");
+  } finally { db.close(); }
 }
 
 const bigint = (value: number) => BigInt(value);
@@ -44,21 +58,21 @@ const visibleColor = (value: string) => hexToPalette.get(value.toLowerCase()) ??
 /** Portable #48 contract implementation; it exposes no Prisma/SQLite value to callers. */
 export class PrismaIdentityGroupRepository implements IdentityGroupRepository {
   async readIdentity(sessionHash: string, at: number): Promise<Identity | null> {
-    const session = await client().accountSession.findUnique({ where: { tokenHash: sessionHash }, include: { account: true } });
+    const session = await prismaIdentityClient().accountSession.findUnique({ where: { tokenHash: sessionHash }, include: { account: true } });
     if (!session || session.revokedAt !== null || Number(session.expiresAt) <= at) return null;
     return { accountId: session.accountId, username: session.account.username };
   }
 
   async readContext(identity: Identity, sessionHash: string): Promise<GroupContext | null> {
-    const session = await client().accountSession.findUnique({ where: { tokenHash: sessionHash } });
+    const session = await prismaIdentityClient().accountSession.findUnique({ where: { tokenHash: sessionHash } });
     if (!session || session.accountId !== identity.accountId || session.revokedAt !== null || !session.selectedGroupId) return null;
-    const membership = await client().accountMembership.findUnique({ where: { accountId_groupId: { accountId: identity.accountId, groupId: session.selectedGroupId } } });
+    const membership = await prismaIdentityClient().accountMembership.findUnique({ where: { accountId_groupId: { accountId: identity.accountId, groupId: session.selectedGroupId } } });
     if (!membership || membership.status !== "active" || membership.groupMode !== "account") return null;
     return { groupId: membership.groupId, memberId: membership.memberId, generation: membership.joinedInviteGeneration };
   }
 
   async createAccountGroup(input: { accountId: string; groupName: string; memberName: string }): Promise<GroupContext> {
-    return client().$transaction(async (tx) => {
+    return prismaIdentityClient().$transaction(async (tx) => {
       const account = await tx.account.findUnique({ where: { id: input.accountId } });
       if (!account) throw new Error("Account is unavailable.");
       const groupId = randomUUID(), memberId = randomUUID();
@@ -76,7 +90,7 @@ export class PrismaIdentityGroupRepository implements IdentityGroupRepository {
  * Library/history maps are deliberately absent: #50 owns those tables and #51 selects a complete runtime.
  */
 export async function readPrismaIdentitySnapshot(): Promise<PrismaIdentitySnapshot> {
-  const db = client();
+  const db = prismaIdentityClient();
   const [accounts, sessions, groups, members, memberships, invitations, pending, legacy] = await Promise.all([
     db.account.findMany(), db.accountSession.findMany(), db.group.findMany(), db.member.findMany(),
     db.accountMembership.findMany(), db.invitation.findMany(), db.pendingGroupInvitation.findMany(), db.groupSession.findMany(),
@@ -103,7 +117,7 @@ export async function readPrismaIdentitySnapshot(): Promise<PrismaIdentitySnapsh
 
 /** The only direct adapter-local transaction point. Prisma maps ordinary rows; SQLite transaction semantics stay here. */
 export async function writePrismaIdentitySnapshot(snapshot: PrismaIdentitySnapshot): Promise<void> {
-  const db = client();
+  const db = prismaIdentityClient();
   await db.$transaction(async (tx) => {
     // Native triggers and FK constraints remain authoritative. Prisma is used for every mapped ordinary row write.
     for (const account of snapshot.accounts) await tx.account.upsert({ where: { id: account.id }, create: {

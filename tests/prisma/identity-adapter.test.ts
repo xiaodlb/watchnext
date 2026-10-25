@@ -95,7 +95,7 @@ it("keeps removal, rotation and newer-generation rejoin authorization server-der
   const replacement = await handleMemory(request("groups/current/invitations/rotate", { expectedContextRevision: 3, confirmed: true, generation: 2 }, owner), ["groups", "current", "invitations", "rotate"]);
   expect(replacement.status).toBe(200); const replacementValue = await replacement.json() as any;
   const relogin = await handleMemory(request("auth/login", { username: "Member.Rotation", password }), ["auth", "login"]);
-  const newMember = cookieOf(relogin, "watchnext_account_session");
+  expect(relogin.status).toBe(200); const newMember = cookieOf(relogin, "watchnext_account_session");
   expect((await handleMemory(request("invitations/resolve", { invite: rotatedValue.invite }, newMember), ["invitations", "resolve"])).status).toBeGreaterThanOrEqual(400);
   expect((await handleMemory(request("invitations/resolve", { invite: replacementValue.invite }, newMember), ["invitations", "resolve"])).status).toBe(200);
   expect((await handleMemory(request("groups/pending/join", { expectedContextRevision: 1 }, newMember), ["groups", "pending", "join"])).status).toBe(200);
