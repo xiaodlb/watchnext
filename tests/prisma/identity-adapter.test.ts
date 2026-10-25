@@ -7,6 +7,7 @@ import { DatabaseSync } from "node:sqlite";
 import { migrate } from "../../db/migrate";
 import { handleMemory, resetHttpMemoryForTests } from "../../lib/http-memory/service";
 import { resetPrismaIdentityForTests } from "../../lib/http-prisma/identity-store";
+import { security } from "../../lib/accounts/security";
 
 const origin = "http://127.0.0.1:3000";
 const password = "Synthetic Prisma password";
@@ -149,4 +150,103 @@ it("keeps every #49 route's invalid method/body parity and atomically rejects a 
     expect(db.prepare("SELECT count(*) AS count FROM groups WHERE access_mode='account'").get()).toMatchObject({ count: 1 });
     expect(db.prepare("PRAGMA foreign_key_check").all()).toEqual([]);
   } finally { db.close(); }
+});
+
+it("matches the complete valid A/G/L operation matrix between memory and selected Prisma", async () => {
+  async function scenario(kind: "memory" | "prisma") {
+    resetHttpMemoryForTests(); await resetPrismaIdentityForTests();
+    // The production rate limit is intentionally process-wide.  This isolated
+    // parity fixture must not inherit attempts from the preceding fixtures.
+    for (const key of ["all", "memory", "prisma"]) {
+      security.signupTotal.clear(key);
+      security.recoveryTotal.clear(key);
+    }
+    if (kind === "prisma") setupPrisma();
+    else {
+      process.env.WATCHNEXT_HTTP_MEMORY = "1";
+      delete process.env.WATCHNEXT_HTTP_REPOSITORY; delete process.env.WATCHNEXT_HTTP_PRISMA_ISOLATED; delete process.env.WATCHNEXT_HTTP_PRISMA_DATABASE_URL;
+    }
+    const suffix = kind === "prisma" ? "Prisma" : "Memory";
+    const ownerRegister = await handleMemory(request("auth/register", { username: `${suffix}.Owner`, password, confirmation: password }), ["auth", "register"]);
+    if (ownerRegister.status !== 200) throw new Error(`${kind} owner registration failed: ${await ownerRegister.text()}`);
+    const ownerValue = await ownerRegister.json() as any, owner = cookieOf(ownerRegister, "watchnext_account_session");
+    const group = await handleMemory(request("groups", { expectedContextRevision: 1, name: `${suffix} group` }, owner), ["groups"]);
+    expect(group.status).toBe(200);
+    const groupValue = await group.json() as any;
+    const ownerCurrent = await handleMemory(request("groups/current", undefined, owner, "GET"), ["groups", "current"]);
+    const selected = await handleMemory(request("context/group-selection", { expectedContextRevision: 2, groupId: groupValue.context.groupId }, owner, "PUT"), ["context", "group-selection"]);
+    const mode = await handleMemory(request("context/mode", { expectedContextRevision: 3, mode: "account" }, owner, "PUT"), ["context", "mode"]);
+    const memberRegister = await handleMemory(request("auth/register", { username: `${suffix}.Member`, password, confirmation: password }), ["auth", "register"]);
+    const member = cookieOf(memberRegister, "watchnext_account_session");
+    const resolveAccount = await handleMemory(request("invitations/resolve", { invite: groupValue.invite }, member), ["invitations", "resolve"]);
+    const join = await handleMemory(request("groups/pending/join", { expectedContextRevision: 1 }, member), ["groups", "pending", "join"]);
+    const joined = await join.json() as any, memberId = joined.members.find((entry: any) => entry.name === `${suffix}.Member`).id;
+    const rotate = await handleMemory(request("groups/current/invitations/rotate", { expectedContextRevision: 4, confirmed: true, generation: 1 }, owner), ["groups", "current", "invitations", "rotate"]);
+    const remove = await handleMemory(request("groups/current/members/remove", { expectedContextRevision: 5, memberId, confirmed: true }, owner), ["groups", "current", "members", "remove"]);
+    const logout = await handleMemory(request("auth/logout", { expectedContextRevision: 2 }, member), ["auth", "logout"]);
+    const ownerRecovery = await handleMemory(request("auth/recovery", { username: `${suffix}.Owner`, proof: ownerValue.recoveryCode, password: "Replacement synthetic password", confirmation: "Replacement synthetic password" }), ["auth", "recovery"]);
+    const legacyGroup = await handleMemory(request("legacy/groups", { name: `${suffix} legacy` }), ["legacy", "groups"]);
+    const legacyValue = await legacyGroup.json() as any;
+    const resolveLegacy = await handleMemory(request("invitations/resolve", { invite: legacyValue.invite }), ["invitations", "resolve"]);
+    const legacy = cookieOf(resolveLegacy, "watchnext_session");
+    const profile = await handleMemory(request("legacy/groups/current/profiles", { expectedContextRevision: 1, name: `${suffix} profile`, color: "teal" }, legacy), ["legacy", "groups", "current", "profiles"]);
+    const profileValue = await profile.json() as any;
+    const profileRead = await handleMemory(request("legacy/groups/current/profiles", undefined, legacy, "GET"), ["legacy", "groups", "current", "profiles"]);
+    const profileSelect = await handleMemory(request("legacy/context/profile", { expectedContextRevision: 2, profileId: profileValue.profileId }, legacy, "PUT"), ["legacy", "context", "profile"]);
+    const contextRead = await handleMemory(request("context", undefined, legacy, "GET"), ["context"]);
+    return [ownerRegister, group, ownerCurrent, selected, mode, memberRegister, resolveAccount, join, rotate, remove, logout, ownerRecovery, legacyGroup, resolveLegacy, profile, profileRead, profileSelect, contextRead].map((response) => response.status);
+  }
+  expect(await scenario("memory")).toEqual(await scenario("prisma"));
+});
+
+it("denies untrusted, stale, cross-account and cross-mode Prisma identity operations", async () => {
+  setupPrisma();
+  for (const key of ["all", "memory", "prisma"]) {
+    security.signupTotal.clear(key);
+    security.recoveryTotal.clear(key);
+  }
+  const denied = async (response: Promise<Response>) => expect((await response).status).toBeGreaterThanOrEqual(400);
+
+  // Account routes: anonymous group access, bad credentials/recovery and malformed group choice.
+  await denied(handleMemory(request("groups", { expectedContextRevision: 1, name: "No session" }), ["groups"]));
+  const ownerRegistration = await handleMemory(request("auth/register", { username: "Denied.Owner", password, confirmation: password }), ["auth", "register"]);
+  const owner = cookieOf(ownerRegistration, "watchnext_account_session");
+  const ownerValue = await ownerRegistration.json() as any;
+  await denied(handleMemory(request("auth/register", { username: "Denied.Owner", password, confirmation: password }), ["auth", "register"]));
+  await denied(handleMemory(request("auth/login", { username: "Denied.Owner", password: "the wrong password" }), ["auth", "login"]));
+  await denied(handleMemory(request("auth/recovery", { username: "Denied.Owner", proof: "not-the-code", password: "Replacement synthetic password", confirmation: "Replacement synthetic password" }), ["auth", "recovery"]));
+  await denied(handleMemory(request("groups/current", undefined, undefined, "GET"), ["groups", "current"]));
+  await denied(handleMemory(request("groups/pending/join", { expectedContextRevision: 1 }), ["groups", "pending", "join"]));
+  await denied(handleMemory(request("invitations/resolve", { invite: `${origin}/invite/not-real` }), ["invitations", "resolve"]));
+
+  const created = await handleMemory(request("groups", { expectedContextRevision: 1, name: "Denied group" }, owner), ["groups"]);
+  const group = await created.json() as any;
+  await denied(handleMemory(request("context/group-selection", { expectedContextRevision: 2, groupId: "not-a-membership" }, owner, "PUT"), ["context", "group-selection"]));
+  await denied(handleMemory(request("context/mode", { expectedContextRevision: 1, mode: "not-a-mode" }, owner, "PUT"), ["context", "mode"]));
+  // The stale revision is checked inside the transaction; a concurrent caller cannot overwrite selection.
+  await denied(handleMemory(request("context/mode", { expectedContextRevision: 1, mode: "account" }, owner, "PUT"), ["context", "mode"]));
+
+  const memberRegistration = await handleMemory(request("auth/register", { username: "Denied.Member", password, confirmation: password }), ["auth", "register"]);
+  const member = cookieOf(memberRegistration, "watchnext_account_session");
+  expect((await handleMemory(request("invitations/resolve", { invite: group.invite }, member), ["invitations", "resolve"])).status).toBe(200);
+  const joined = await handleMemory(request("groups/pending/join", { expectedContextRevision: 1 }, member), ["groups", "pending", "join"]);
+  const joinedValue = await joined.json() as any;
+  const ownerMemberId = joinedValue.members.find((entry: any) => entry.name === "Denied.Owner").id;
+  // A member cannot manage invitations or remove the owner.
+  await denied(handleMemory(request("groups/current/invitations/rotate", { expectedContextRevision: 2, confirmed: true, generation: 1 }, member), ["groups", "current", "invitations", "rotate"]));
+  await denied(handleMemory(request("groups/current/members/remove", { expectedContextRevision: 2, confirmed: true, memberId: ownerMemberId }, member), ["groups", "current", "members", "remove"]));
+
+  // Legacy-only paths reject account credentials and an unrelated profile id.
+  await denied(handleMemory(request("legacy/groups", { name: "" }), ["legacy", "groups"]));
+  await denied(handleMemory(request("legacy/groups/current/profiles", undefined, owner, "GET"), ["legacy", "groups", "current", "profiles"]));
+  const legacyGroup = await handleMemory(request("legacy/groups", { name: "Denied legacy" }), ["legacy", "groups"]);
+  const legacyInvite = (await legacyGroup.json() as any).invite;
+  const legacyResponse = await handleMemory(request("invitations/resolve", { invite: legacyInvite }), ["invitations", "resolve"]);
+  const legacy = cookieOf(legacyResponse, "watchnext_session");
+  await denied(handleMemory(request("legacy/context/profile", { expectedContextRevision: 1, profileId: "not-a-profile" }, legacy, "PUT"), ["legacy", "context", "profile"]));
+
+  // Logout revokes the durable account session, so every later group read is denied.
+  expect((await handleMemory(request("auth/logout", { expectedContextRevision: 2 }, member), ["auth", "logout"])).status).toBe(200);
+  await denied(handleMemory(request("groups/current", undefined, member, "GET"), ["groups", "current"]));
+  expect(ownerValue.recoveryCode).toEqual(expect.any(String));
 });
