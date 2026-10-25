@@ -58,6 +58,9 @@ WatchNext is an academic web app that helps couples and friends choose something
 - `_docs/plan.md` - agreed product scope and unresolved decisions.
 - `_docs/tasks.md` - links to the GitHub backlog issues.
 - `_docs/database.md` - SQLite schema, migrations, validation boundaries, and isolated verification commands.
+- _docs/prisma-baseline.md - #48 isolated Prisma mapping/baseline procedure and recovery boundary.
+- _docs/prisma-constraint-inventory.md - native SQLite protections Prisma cannot express.
+- _docs/repository-boundaries.md - #49–#51 portable repository/adaptor handoff.
 - `_docs/local-setup.md` - actual install/init/dev/production operation and troubleshooting.
 - `_docs/backup-restore.md` - explicit private WAL-safe snapshots and separate restore/deadline handling.
 - `_docs/completion-audit.md` - dated requirement/backlog evidence and verification limits.
