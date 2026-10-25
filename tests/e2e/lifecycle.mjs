@@ -40,7 +40,7 @@ export async function createFixture() {
   }
   const origin = `http://127.0.0.1:${port}`;
   const environment = { ...process.env, HOME: join(root, "fake-home"), USERPROFILE: join(root, "fake-home"), LOCALAPPDATA: join(root, "normal-default"), XDG_DATA_HOME: join(root, "normal-default"), WATCHNEXT_DATABASE_PATH: path, WATCHNEXT_APP_ORIGIN: origin, YOUTUBE_API_KEY: secrets[0], KINOPOISK_UNOFFICIAL_API_KEY: secrets[1], NEXT_TELEMETRY_DISABLED: "1" };
-  let server, building, browser, db, output = "", cleaned = false, cleanupComplete = false;
+  let server, building, browser, db, output = "", cleaned = false, cleanupComplete = false, built = false;
   const capture = child => { child.stdout.on("data", value => { output += value; }); child.stderr.on("data", value => { output += value; }); child.on("error", () => {}); return child; };
   const stop = async child => {
     if (!child || child.exitCode !== null || child.signalCode !== null) return;
@@ -53,7 +53,11 @@ export async function createFixture() {
   // a successful fixture cleanup into an ENOENT failure.
   const files = directory => {
     try {
-      return readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(join(directory, entry.name)) : [join(directory, entry.name)]);
+      // Audit ordinary files only. A generated output can contain a directory
+      // link (for example a Windows junction); trying to read it as a file
+      // causes EISDIR and turns otherwise safe fixture cleanup into a failure.
+      // We neither follow nor inspect links outside this owned fixture.
+      return readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(join(directory, entry.name)) : entry.isFile() ? [join(directory, entry.name)] : []);
     } catch (error) {
       if (error?.code === "ENOENT") return [];
       throw error;
@@ -70,7 +74,7 @@ export async function createFixture() {
       fixture.initialize();
       building = capture(spawn(process.execPath, [join(repo, "node_modules/next/dist/bin/next"), "build"], { cwd: repo, env: environment, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] }));
       let timer;
-      try { await new Promise((done, fail) => { timer = setTimeout(() => { void stop(building).then(() => fail(new Error("Production build exceeded five minutes")), fail); }, 300000); building.once("error", fail); building.once("exit", code => code === 0 ? done() : fail(new Error(`Production build failed (exit ${code}); run pnpm build for compiler diagnostics`))); }); }
+      try { await new Promise((done, fail) => { timer = setTimeout(() => { void stop(building).then(() => fail(new Error("Production build exceeded five minutes")), fail); }, 300000); building.once("error", fail); building.once("exit", code => code === 0 ? done() : fail(new Error(`Production build failed (exit ${code}); run pnpm build for compiler diagnostics`))); }); built = true; }
       finally { clearTimeout(timer); }
     },
     async stop() { await stop(server); server = undefined; },
@@ -96,7 +100,11 @@ export async function createFixture() {
     },
     async audit() {
       if (secrets.some(secret => output.includes(secret))) throw new Error("Raw synthetic credential found in captured routine output");
-      for (const file of [...(existsSync(join(repo, ".next")) ? files(join(repo, ".next")) : []), ...files(root)]) {
+      // A fixture that never built cannot have placed provider credentials in
+      // the shared Next output. Avoid scanning another test worker's large
+      // `.next` tree during partial-fixture cleanup; built fixtures still
+      // audit their generated output below.
+      for (const file of [...(built && existsSync(join(repo, ".next")) ? files(join(repo, ".next")) : []), ...files(root)]) {
         let content;
         try { content = readFileSync(file); }
         catch (error) { if (error?.code === "ENOENT") continue; throw error; }

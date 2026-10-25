@@ -7,7 +7,19 @@ export type Identity = { accountId: string; username: string };
 export type GroupContext = { groupId: string; memberId: string; generation: number };
 export type SavedTitleRecord = { id: string; groupId: string; archived: boolean };
 
+/** Every #49 HTTP identity/group operation. #50 owns every omitted library path. */
+export type IdentityGroupOperationPath =
+  | "context"
+  | "auth/register" | "auth/login" | "auth/logout" | "auth/recovery"
+  | "groups" | "groups/current" | "groups/pending/join"
+  | "groups/current/members/remove" | "groups/current/invitations/rotate"
+  | "invitations/resolve" | "context/group-selection" | "context/mode"
+  | "legacy/groups" | "legacy/groups/current/profiles" | "legacy/context/profile";
+export type IdentityGroupOperation = { request: Request; path: IdentityGroupOperationPath };
+
 export interface IdentityGroupRepository {
+  /** Executes every account/group/legacy route through the adapter, never a mutable memory projection. */
+  execute(operation: IdentityGroupOperation): Promise<Response>;
   readIdentity(sessionHash: string, now: number): Promise<Identity | null>;
   readContext(identity: Identity, sessionHash: string): Promise<GroupContext | null>;
   createAccountGroup(input: { accountId: string; groupName: string; memberName: string }): Promise<GroupContext>;

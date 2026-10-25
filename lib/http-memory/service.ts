@@ -1,6 +1,8 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { AuthError, checkPassword, makePassword, passwordInput, security, usernameInput } from "../accounts/security";
 import { ProcessMemoryRepository } from "./repository";
+import { resetPrismaIdentityForTests } from "../http-prisma/identity-store";
+import { handlePrismaIdentity } from "../http-prisma/identity-service";
 import { safeExternalUrl } from "../urls";
 import { youtubeProvider } from "../metadata/youtube-transport";
 import { kinopoiskUnofficialProvider } from "../metadata/kinopoisk-transport";
@@ -128,8 +130,8 @@ function conflict(c:LibraryContext,message:string){return json({kind:"conflict",
 function pruneCycles(){const time=Date.now();for(const [id,value] of state().cycles)if(value.expiresAt<=time)state().cycles.delete(id);}
 function storeCycle(c:LibraryContext,authority:string,input:PickerInput){pruneCycles();if(state().cycles.size>=512)state().cycles.delete(state().cycles.keys().next().value!);const value:MemoryCycle={id:token(),authority,groupId:c.group.id,context:contextDto(c).revision+":"+c.group.id+":"+(c.member?.id??""),input,expiresAt:Date.now()+cycleLifetimeMs};state().cycles.set(value.id,value);return value;}
 
-export async function handleMemory(request:Request,path:string[]):Promise<Response>{
- if(process.env.WATCHNEXT_HTTP_MEMORY!=="1")return error(503,"service_unavailable","The isolated HTTP memory mode is not enabled.",true);
+async function handleMemoryInProcess(request:Request,path:string[]):Promise<Response>{
+ if(process.env.WATCHNEXT_HTTP_MEMORY!=="1"&&!prismaMode())return error(503,"service_unavailable","The isolated HTTP memory mode is not enabled.",true);
  try{const key=path.join("/");if(request.method!=="GET")mutation(request);const input=request.method==="GET"?{}:await body(request);
   if(key==="auth/register"&&request.method==="POST"){const {username,key}=usernameInput(input.username),password=passwordInput(input.password);if(input.confirmation!==password)throw new AuthError("The password confirmation must match exactly.");security.signup.take(key);security.signupTotal.take("memory");if(state().byKey.has(key))throw new AuthError("That username is already taken. Choose another.");const p=await makePassword(password),recovery=token(),id=randomUUID();const account:Account={id,username,key,password_version:1,password_algorithm:"scrypt",password_hash:p.hash,password_salt:p.salt,password_n:131072,password_r:8,password_p:1,password_maxmem:268435456,recovery:hash(recovery)};state().accounts.set(id,account);state().byKey.set(key,id);const raw=token();state().sessions.set(hash(raw),{token:hash(raw),accountId:id,expires:now()+604800,revoked:false,revision:1,groupId:null});return json({recoveryCode:recovery,next:"account",context:context("account",1,null)},200,{"Referrer-Policy":"no-referrer","Set-Cookie":cookieValue("watchnext_account_session",raw)});}
   if(key==="auth/login"&&request.method==="POST"){const {key}=usernameInput(input.username),password=passwordInput(input.password);security.login.take(key);const id=state().byKey.get(key),account=id?state().accounts.get(id):undefined;if(!await checkPassword(password,account))throw new AuthError("Username or password is incorrect.");const old=cookie(request,"watchnext_account_session");if(old){const previous=state().sessions.get(hash(old));if(previous)previous.revoked=true;}const raw=token();state().sessions.set(hash(raw),{token:hash(raw),accountId:account!.id,expires:now()+604800,revoked:false,revision:1,groupId:null});security.login.clear(key);return json({context:context("account",1,null),account:{id:account!.id,username:account!.username,memberships:[]},group:null},200,{"Set-Cookie":cookieValue("watchnext_account_session",raw)});}
@@ -182,5 +184,13 @@ export async function handleMemory(request:Request,path:string[]):Promise<Respon
 
 /** Test-only injection replaces outbound transport, never normalized adapters, application writes or authentication. */
 export function setHttpMemoryTransportsForTests(value:MemoryTransports|undefined){transportOverride=value;}
-export function resetHttpMemoryForTests(){repository().reset();transportOverride=undefined;}
+export function resetHttpMemoryForTests(){repository().reset();transportOverride=undefined; void resetPrismaIdentityForTests();}
 
+
+function prismaMode() { return process.env.WATCHNEXT_HTTP_REPOSITORY === "prisma"; }
+
+/** #49 composition seam: selected identity/group routes execute direct Prisma repositories. */
+export async function handleMemory(request: Request, path: string[]): Promise<Response> {
+  if (prismaMode()) return handlePrismaIdentity(request, path);
+  return handleMemoryInProcess(request, path);
+}

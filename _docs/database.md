@@ -189,3 +189,5 @@ SQLite replacement uses deferred foreign keys inside the migration transaction. 
 ## Prisma mapping baseline (issue #48)
 
 `prisma/schema.prisma` now maps this native schema and the immutable migration ledger, but application runtime storage remains the native `node:sqlite` layer. Read [prisma-baseline.md](prisma-baseline.md) for the owned-copy-only validation commands and recovery procedure, and [prisma-constraint-inventory.md](prisma-constraint-inventory.md) before any adapter work. Prisma does not replace the native `CHECK` constraints, triggers, `STRICT` tables, transaction/busy configuration, secure deletion or migration-ledger verification.
+
+Issue #49 adds only an **isolated account/group adapter evaluation** behind trusted server configuration, documented in [prisma-identity.md](prisma-identity.md). It is not normal runtime selection and cannot point at normal/default/demo storage; #50 and #51 retain the full-library/full-runtime boundary.
