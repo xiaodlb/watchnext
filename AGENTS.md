@@ -17,6 +17,7 @@
 - `pnpm db:verify:persistence` - verify fresh-process persistence using isolated temporary files
 - `pnpm db:snapshot '<absolute source>' '<new absolute destination>'` - explicit private SQLite-consistent snapshot/restore; read `_docs/backup-restore.md`, never overwrite an existing destination
 - `pnpm db:verify:backup` - isolated WAL-aware snapshot/restore/expiry verification; never uses normal/demo storage
+- `pnpm prisma:identity:verify` - run isolated #49 Prisma identity/group persistence and authorization checks
 - `pnpm verify:fresh-checkout` - from clean committed source, install and verify the documented setup/dev/production/demo/tests in an owned temporary local clone; see `_docs/enhancement-audit.md`
 - `pnpm start` - serve the production build locally
 
@@ -61,6 +62,7 @@ WatchNext is an academic web app that helps couples and friends choose something
 - _docs/prisma-baseline.md - #48 isolated Prisma mapping/baseline procedure and recovery boundary.
 - _docs/prisma-constraint-inventory.md - native SQLite protections Prisma cannot express.
 - _docs/repository-boundaries.md - #49–#51 portable repository/adaptor handoff.
+- `_docs/prisma-identity.md` - #49 adapter selection, isolation guard, verification and limits.
 - `_docs/local-setup.md` - actual install/init/dev/production operation and troubleshooting.
 - `_docs/backup-restore.md` - explicit private WAL-safe snapshots and separate restore/deadline handling.
 - `_docs/completion-audit.md` - dated requirement/backlog evidence and verification limits.

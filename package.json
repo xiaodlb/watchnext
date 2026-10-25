@@ -26,7 +26,8 @@
     "test:mock": "node tests/fixtures/mock-foundation-browser-check.mjs",
     "contract:verify": "node scripts/verify-openapi.mjs",
     "prisma:check": "node scripts/prisma/check.mjs",
-    "prisma:baseline:verify": "node scripts/prisma/verify-baseline.mjs"
+    "prisma:baseline:verify": "node scripts/prisma/verify-baseline.mjs",
+    "prisma:identity:verify": "vitest run tests/prisma/identity-adapter.test.ts"
   },
   "engines": {
     "node": ">=24.15.0 <25"
