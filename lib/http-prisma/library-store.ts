@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { prismaIdentityClient } from "./identity-store";
+import { prismaIdentityClient, prismaProvider } from "./identity-store";
 import type { LibraryHistoryRepository, MetadataContext, MetadataContextClaim, MetadataContextInput, MetadataContextKind, PickerProjection, SavedTitleRecord } from "../repositories/contracts";
 import { inspectNoteDraft } from "../note-state";
 
@@ -33,9 +33,13 @@ export class PrismaLibraryRepository implements LibraryHistoryRepository {
 
   private async write<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
     return this.db.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe("PRAGMA foreign_keys=ON");
-      await tx.$queryRawUnsafe("PRAGMA busy_timeout=5000");
-      await tx.$queryRawUnsafe("PRAGMA secure_delete=ON");
+      if (prismaProvider() === "sqlite") {
+        await tx.$queryRawUnsafe("PRAGMA foreign_keys=ON");
+        await tx.$queryRawUnsafe("PRAGMA busy_timeout=5000");
+        await tx.$queryRawUnsafe("PRAGMA secure_delete=ON");
+      } else {
+        await tx.$queryRawUnsafe("SET LOCAL lock_timeout = '5000ms'");
+      }
       return operation(tx);
     }, { maxWait: 5000, timeout: 8000 });
   }

@@ -29,7 +29,11 @@
     "prisma:baseline:verify": "node scripts/prisma/verify-baseline.mjs",
     "prisma:identity:verify": "vitest run tests/prisma/identity-adapter.test.ts",
     "prisma:library:verify": "vitest run tests/prisma/library-adapter.test.ts",
-    "prisma:cutover:verify": "vitest run tests/prisma/cutover.test.ts && node tests/fixtures/prisma-cutover-browser-check.mjs"
+    "prisma:cutover:verify": "vitest run tests/prisma/cutover.test.ts && node tests/fixtures/prisma-cutover-browser-check.mjs",
+    "prisma:postgres:start": "node scripts/prisma/postgres-portability.mjs start",
+    "prisma:postgres:verify": "node scripts/prisma/postgres-portability.mjs verify",
+    "prisma:postgres:cleanup": "node scripts/prisma/postgres-portability.mjs cleanup",
+    "prisma:sqlite:portability": "node scripts/prisma/sqlite-portability.mjs"
   },
   "engines": {
     "node": ">=24.15.0 <25"

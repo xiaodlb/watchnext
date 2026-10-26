@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: watchnext
+      POSTGRES_USER: watchnext
+      POSTGRES_PASSWORD: ${WATCHNEXT_POSTGRES_PASSWORD:?The owned portability command supplies this value.}
+    ports:
+      - "127.0.0.1::5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U watchnext -d watchnext"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

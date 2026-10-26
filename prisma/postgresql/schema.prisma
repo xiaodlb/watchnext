@@ -1,0 +1,297 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../generated/postgres-client"
+}
+
+datasource db {
+  provider     = "postgresql"
+  url          = env("WATCHNEXT_POSTGRES_URL")
+  relationMode = "foreignKeys"
+}
+
+model SchemaMigration {
+  version   String @id
+  filename  String
+  checksum  String
+  appliedAt String @default(dbgenerated("CURRENT_TIMESTAMP")) @map("applied_at")
+
+  @@map("schema_migrations")
+}
+
+model Group {
+  id                String  @id
+  name              String
+  createdAt         String  @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at")
+  accessMode        String  @default("legacy") @map("access_mode")
+  ownerAccountId    String? @map("owner_account_id")
+  inviteGeneration  Int     @default(1) @map("invite_generation")
+  ownerAccount      Account? @relation("OwnedAccountGroups", fields: [ownerAccountId], references: [id])
+  invitations       Invitation[]
+  members           Member[]
+  titles            Title[]
+  legacySessions    GroupSession[]
+  accountMemberships AccountMembership[]
+  selectedBySessions AccountSession[] @relation("SelectedAccountGroup")
+  metadataReviews   MetadataReview[]
+
+  @@unique([id, accessMode])
+  @@map("groups")
+}
+
+model Invitation {
+  id         String @id
+  groupId    String @map("group_id")
+  tokenHash  String @unique @map("token_hash")
+  revokedAt  String? @map("revoked_at")
+  createdAt  String @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at")
+  generation Int @default(1)
+  group      Group @relation(fields: [groupId], references: [id])
+  sessions   GroupSession[]
+  pendingIntents PendingGroupInvitation[]
+
+  @@unique([id, groupId])
+  @@map("invitations")
+}
+
+model Member {
+  id          String @id
+  groupId     String @map("group_id")
+  name        String
+  nameKey     String @map("name_key")
+  avatarColor String @map("avatar_color")
+  createdAt   String @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at")
+  group       Group @relation(fields: [groupId], references: [id])
+  contributions Contributor[]
+  progress    Progress[]
+  ratings     Rating[]
+  notes       Note[]
+  accountMembership AccountMembership?
+  activeInSessions GroupSession[] @relation("ActiveLegacyMember")
+  metadataReviews MetadataReview[]
+
+  @@unique([groupId, nameKey])
+  @@unique([id, groupId])
+  @@map("members")
+}
+
+model Title {
+  id                  String @id
+  groupId             String @map("group_id")
+  title               String?
+  titleKey            String? @map("title_key")
+  contentType         String? @map("content_type")
+  durationSeconds     Int? @map("duration_seconds")
+  numberingStyle      String @map("numbering_style")
+  providerNamespace   String? @map("provider_namespace")
+  providerId          String? @map("provider_id")
+  sourceUrl           String? @map("source_url")
+  watchUrl            String? @map("watch_url")
+  coverUrl            String? @map("cover_url")
+  metadataUnavailable Boolean @default(false) @map("metadata_unavailable")
+  archived            Boolean @default(false)
+  createdAt           String @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at")
+  group               Group @relation(fields: [groupId], references: [id])
+  genres              TitleGenre[]
+  titleMoods          TitleMood[]
+  contributors        Contributor[]
+  progress            Progress[]
+  ratings             Rating[]
+  notes               Note[]
+  metadataFields      MetadataField[]
+
+  @@unique([groupId, contentType, titleKey])
+  @@unique([groupId, providerNamespace, providerId])
+  @@unique([id, groupId])
+  @@unique([id, groupId, numberingStyle])
+  @@index([groupId, archived], map: "titles_active")
+  @@map("titles")
+}
+
+model TitleGenre {
+  titleId  String @map("title_id")
+  genreKey String @map("genre_key")
+  label    String
+  title    Title @relation(fields: [titleId], references: [id])
+
+  @@id([titleId, genreKey])
+  @@map("title_genres")
+}
+
+model Mood {
+  code       String @id
+  label      String @unique
+  titleMoods TitleMood[]
+
+  @@map("moods")
+}
+
+model TitleMood {
+  titleId  String @map("title_id")
+  moodCode String @map("mood_code")
+  title    Title @relation(fields: [titleId], references: [id])
+  mood     Mood @relation(fields: [moodCode], references: [code])
+
+  @@id([titleId, moodCode])
+  @@map("title_moods")
+}
+
+model Contributor {
+  groupId   String @map("group_id")
+  titleId   String @map("title_id")
+  memberId  String @map("member_id")
+  createdAt String @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at")
+  title     Title @relation(fields: [titleId, groupId], references: [id, groupId])
+  member    Member @relation(fields: [memberId, groupId], references: [id, groupId])
+
+  @@id([titleId, memberId])
+  @@map("contributors")
+}
+
+model Progress {
+  groupId          String @map("group_id")
+  titleId          String @map("title_id")
+  memberId         String @map("member_id")
+  numberingStyle   String @map("numbering_style")
+  positionState    String @default("unknown") @map("position_state")
+  nextSeason       Int? @map("next_season")
+  nextEpisode      Int? @map("next_episode")
+  timestampSeconds Int? @map("timestamp_seconds")
+  completed        Boolean @default(false)
+  title            Title @relation(fields: [titleId, groupId, numberingStyle], references: [id, groupId, numberingStyle])
+  member           Member @relation(fields: [memberId, groupId], references: [id, groupId])
+
+  @@id([titleId, memberId])
+  @@map("progress")
+}
+
+model Rating {
+  groupId  String @map("group_id")
+  titleId  String @map("title_id")
+  memberId String @map("member_id")
+  score    Int
+  title    Title @relation(fields: [titleId, groupId], references: [id, groupId])
+  member   Member @relation(fields: [memberId, groupId], references: [id, groupId])
+
+  @@id([titleId, memberId])
+  @@map("ratings")
+}
+
+model Note {
+  groupId  String @map("group_id")
+  titleId  String @map("title_id")
+  memberId String @map("member_id")
+  body     String
+  title    Title @relation(fields: [titleId, groupId], references: [id, groupId])
+  member   Member @relation(fields: [memberId, groupId], references: [id, groupId])
+
+  @@id([titleId, memberId])
+  @@map("notes")
+}
+
+model GroupSession {
+  tokenHash       String @id @map("token_hash")
+  groupId         String @map("group_id")
+  invitationId    String @map("invitation_id")
+  activeMemberId  String? @map("active_member_id")
+  createdAt       String @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at")
+  contextRevision BigInt @default(0) @map("context_revision")
+  group           Group @relation(fields: [groupId], references: [id])
+  invitation      Invitation @relation(fields: [invitationId, groupId], references: [id, groupId])
+  activeMember    Member? @relation("ActiveLegacyMember", fields: [activeMemberId, groupId], references: [id, groupId])
+
+  @@map("group_sessions")
+}
+
+model Account {
+  id               String @id
+  username         String
+  usernameKey      String @unique @map("username_key")
+  passwordVersion  Int @map("password_version")
+  passwordAlgorithm String @map("password_algorithm")
+  passwordHash     String @map("password_hash")
+  passwordSalt     String @map("password_salt")
+  passwordN        Int @map("password_n")
+  passwordR        Int @map("password_r")
+  passwordP        Int @map("password_p")
+  passwordMaxmem   Int @map("password_maxmem")
+  recoveryDigest   String @map("recovery_digest")
+  createdAt        String @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at")
+  sessions         AccountSession[]
+  ownedGroups      Group[] @relation("OwnedAccountGroups")
+  memberships      AccountMembership[]
+
+  @@map("accounts")
+}
+
+model AccountSession {
+  tokenHash       String @id @map("token_hash")
+  accountId       String @map("account_id")
+  createdAt       BigInt @map("created_at")
+  expiresAt       BigInt @map("expires_at")
+  revokedAt       BigInt? @map("revoked_at")
+  selectedGroupId String? @map("selected_group_id")
+  contextRevision BigInt @default(0) @map("context_revision")
+  account         Account @relation(fields: [accountId], references: [id])
+  selectedGroup   Group? @relation("SelectedAccountGroup", fields: [selectedGroupId], references: [id])
+
+  @@index([accountId, expiresAt], map: "account_sessions_account")
+  @@map("account_sessions")
+}
+
+model AccountMembership {
+  accountId              String @map("account_id")
+  groupId                String @map("group_id")
+  groupMode              String @default("account") @map("group_mode")
+  memberId               String @unique @map("member_id")
+  status                 String @default("active")
+  joinedInviteGeneration Int @map("joined_invite_generation")
+  removedInviteGeneration Int? @map("removed_invite_generation")
+  removedAt              String? @map("removed_at")
+  createdAt              String @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at")
+  account                Account @relation(fields: [accountId], references: [id])
+  group                  Group @relation(fields: [groupId, groupMode], references: [id, accessMode])
+  member                 Member @relation(fields: [memberId, groupId], references: [id, groupId])
+
+  @@id([accountId, groupId])
+  @@unique([memberId, groupId])
+  @@index([groupId, status, accountId], map: "account_memberships_live")
+  @@map("account_memberships")
+}
+
+model MetadataField {
+  titleId     String @map("title_id")
+  field       String
+  origin      String
+  cleared     Boolean @default(false)
+  retrievedAt String? @map("retrieved_at")
+  expiresAt   String? @map("expires_at")
+  title       Title @relation(fields: [titleId], references: [id])
+
+  @@id([titleId, field])
+  @@index([origin, expiresAt], map: "metadata_expiry")
+  @@map("metadata_fields")
+}
+
+model MetadataReview {
+  handleHash String @id @map("handle_hash")
+  groupId    String @map("group_id")
+  memberId   String @map("member_id")
+  sessionId  String @map("session_id")
+  expiresAt  String @map("expires_at")
+  payload    String
+  group      Group @relation(fields: [groupId], references: [id])
+  member     Member @relation(fields: [memberId, groupId], references: [id, groupId])
+
+  @@index([expiresAt], map: "metadata_review_expiry")
+  @@map("metadata_reviews")
+}
+
+model PendingGroupInvitation {
+  intentHash   String @id @map("intent_hash")
+  invitationId String @map("invitation_id")
+  expiresAt    BigInt @map("expires_at")
+  invitation   Invitation @relation(fields: [invitationId], references: [id])
+
+  @@index([expiresAt], map: "pending_group_invitations_expiry")
+  @@map("pending_group_invitations")
+}

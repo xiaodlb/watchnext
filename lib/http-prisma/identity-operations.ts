@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { Account, AccountMembership, AccountSession, Group, GroupSession, Invitation, Member, Prisma } from "@prisma/client";
 import { AuthError, checkPassword, makePassword, passwordInput, security, usernameInput } from "../accounts/security";
-import { prismaIdentityClient, verifyPrismaIdentitySQLiteAdapter } from "./identity-store";
+import { prismaIdentityClient, prismaProvider, verifyPrismaIdentityAdapter } from "./identity-store";
 import type { IdentityGroupOperation } from "../repositories/contracts";
 
 type AccountSessionWithAccount = AccountSession & { account: Account };
@@ -88,9 +88,15 @@ function invitationUrl(raw: string) { return `${origin()}/invite/${raw}`; }
  */
 async function writeTransaction<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return prismaIdentityClient().$transaction(async (tx) => {
-    await tx.$queryRawUnsafe("PRAGMA foreign_keys=ON");
-    await tx.$queryRawUnsafe("PRAGMA busy_timeout=5000");
-    await tx.$queryRawUnsafe("PRAGMA secure_delete=ON");
+    if (prismaProvider() === "sqlite") {
+      await tx.$queryRawUnsafe("PRAGMA foreign_keys=ON");
+      await tx.$queryRawUnsafe("PRAGMA busy_timeout=5000");
+      await tx.$queryRawUnsafe("PRAGMA secure_delete=ON");
+    } else {
+      // Bounded transactions are the PostgreSQL equivalent of the SQLite busy
+      // timeout. It avoids a test fixture waiting indefinitely on a lock.
+      await tx.$queryRawUnsafe("SET LOCAL lock_timeout = '5000ms'");
+    }
     return operation(tx);
   }, { maxWait: 5000, timeout: 6000 });
 }
@@ -98,7 +104,7 @@ async function writeTransaction<T>(operation: (tx: Prisma.TransactionClient) => 
 /** A real durable #49 route implementation. Library/history paths intentionally remain #50 work. */
 export async function executePrismaIdentityGroupOperation({ request, path: key }: IdentityGroupOperation): Promise<Response> {
   try {
-    verifyPrismaIdentitySQLiteAdapter();
+    verifyPrismaIdentityAdapter();
     if (request.method !== "GET") mutation(request);
     const input = request.method === "GET" ? {} : await body(request);
     const db = prismaIdentityClient();
