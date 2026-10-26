@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { migrate } from "../../db/migrate";
 import { PrismaLibraryRepository } from "../../lib/http-prisma/library-store";
 import { prismaIdentityClient, resetPrismaIdentityForTests } from "../../lib/http-prisma/identity-store";
+import { MemoryLibraryRepository } from "../../lib/repositories/memory-library-store";
 
 const roots: string[] = [];
 function savedId(outcome: { title?: { id: string } | null }) { if (!outcome.title) throw new Error("Expected a saved title."); return outcome.title.id; }
@@ -196,4 +197,48 @@ it("reads and writes beside a populated native fixture without changing its IDs,
     metadata: await db.metadataField.findUnique({ where: { titleId_field: { titleId: "native-title", field: "title" } } }),
   }).toEqual(before);
   expect(await db.$queryRawUnsafe<Array<{ problems: unknown }>>("PRAGMA foreign_key_check")).toEqual([]);
+});
+
+it("persists one-time pending pages and reviews with expiry, supersession, parent consumption, and malformed cleanup", async () => {
+  const { db, repository } = await setup();
+  const first = await repository.createPendingPage({ groupId: "group-a", memberId: "alice", sessionId: "session-a", scope: "youtube-search", payload: { page: 1 } });
+  const second = await repository.createPendingPage({ groupId: "group-a", memberId: "alice", sessionId: "session-a", scope: "youtube-search", payload: { page: 2 } });
+  await expect(repository.consumePendingPage({ handle: first.handle, groupId: "group-a", memberId: "alice", sessionId: "session-a" })).rejects.toThrow(/review/i);
+  const review = await repository.createReview({ groupId: "group-a", memberId: "alice", sessionId: "session-a", scope: "youtube-search", parentHandle: second.handle, payload: { candidate: "video-2" } });
+  await expect(repository.consumePendingPage({ handle: second.handle, groupId: "group-a", memberId: "alice", sessionId: "session-a" })).rejects.toThrow(/review/i);
+  expect(await repository.consumeReview({ handle: review.handle, groupId: "group-a", memberId: "alice", sessionId: "session-a" })).toEqual({ candidate: "video-2" });
+  await expect(repository.consumeReview({ handle: review.handle, groupId: "group-a", memberId: "alice", sessionId: "session-a" })).rejects.toThrow(/review/i);
+  const expired = await repository.createPendingPage({ groupId: "group-a", memberId: "alice", sessionId: "session-a", scope: "expired", payload: { private: "expired" }, expiresAt: new Date(Date.now() - 1) });
+  await expect(repository.consumePendingPage({ handle: expired.handle, groupId: "group-a", memberId: "alice", sessionId: "session-a" })).rejects.toThrow(/review/i);
+  const cleanup = await repository.createPendingPage({ groupId: "group-a", memberId: "alice", sessionId: "session-a", scope: "cleanup", payload: { private: "cleanup" }, expiresAt: new Date(Date.now() - 1) });
+  expect(await repository.clearExpiredMetadata()).toBe(1);
+  await expect(repository.consumePendingPage({ handle: cleanup.handle, groupId: "group-a", memberId: "alice", sessionId: "session-a" })).rejects.toThrow(/review/i);
+  const malformedHandle = "malformed-page-handle";
+  await db.metadataReview.create({ data: { handleHash: (await import("node:crypto")).createHash("sha256").update(malformedHandle).digest("hex"), groupId: "group-a", memberId: "alice", sessionId: "session-a", expiresAt: new Date(Date.now() + 600000).toISOString(), payload: "not-json" } });
+  await expect(repository.consumePendingPage({ handle: malformedHandle, groupId: "group-a", memberId: "alice", sessionId: "session-a" })).rejects.toThrow(/review/i);
+  expect(await db.metadataReview.findMany()).toEqual([]);
+});
+
+it("keeps the portable memory and Prisma adapters aligned for library, feedback, picker, and review lifecycle", async () => {
+  const { repository: prisma } = await setup();
+  const memory = new MemoryLibraryRepository([{ groupId: "group-a", memberId: "alice" }, { groupId: "group-a", memberId: "bob" }]);
+  const input = { groupId: "group-a", memberId: "alice", draft: draft("Parity film", "movie", 600) };
+  const prismaSaved = await prisma.save(input), memorySaved = await memory.save(input);
+  const prismaId = savedId(prismaSaved), memoryId = savedId(memorySaved);
+  await Promise.all([
+    prisma.save({ ...input, memberId: "bob" }), memory.save({ ...input, memberId: "bob" }),
+    prisma.patchPersonal("group-a", "alice", prismaId, { positionState: "in_progress", timestampSeconds: 42, rating: 8, note: "Parity note" }),
+    memory.patchPersonal("group-a", "alice", memoryId, { positionState: "in_progress", timestampSeconds: 42, rating: 8, note: "Parity note" }),
+  ]);
+  const prismaList = await prisma.list("group-a", "alice"), memoryList = await memory.list("group-a", "alice");
+  expect(prismaList.map((item: any) => ({ title: item.title, type: item.contentType, moods: item.moods, rating: item.ratings[0]?.score, note: item.notes[0]?.body }))).toEqual(memoryList.map((item: any) => ({ title: item.title, type: item.contentType, moods: item.moods, rating: item.ratings[0]?.score, note: item.notes[0]?.body })));
+  expect((await prisma.pickerProjection("group-a", "alice", ["alice"])).titles.map((item: any) => item.title)).toEqual((await memory.pickerProjection("group-a", "alice", ["alice"])).titles.map((item: any) => item.title));
+  const prismaPage = await prisma.createPendingPage({ groupId: "group-a", memberId: "alice", sessionId: "session-a", scope: "parity", payload: { page: 1 } });
+  const memoryPage = await memory.createMetadataContext({ groupId: "group-a", memberId: "alice", sessionId: "session-a", kind: "page", scope: "parity", payload: { page: 1 } });
+  const prismaReview = await prisma.createReview({ groupId: "group-a", memberId: "alice", sessionId: "session-a", scope: "parity", parentHandle: prismaPage.handle, payload: { selected: "video" } });
+  const memoryReview = await memory.createReview({ groupId: "group-a", memberId: "alice", sessionId: "session-a", scope: "parity", parentHandle: memoryPage.handle, payload: { selected: "video" } });
+  expect(await prisma.consumeReview({ handle: prismaReview.handle, groupId: "group-a", memberId: "alice", sessionId: "session-a" })).toEqual(await memory.consumeReview({ handle: memoryReview.handle, groupId: "group-a", memberId: "alice", sessionId: "session-a" }));
+  await Promise.all([prisma.removeContribution("group-a", "alice", prismaId), prisma.removeContribution("group-a", "bob", prismaId), memory.removeContribution("group-a", "alice", memoryId), memory.removeContribution("group-a", "bob", memoryId)]);
+  expect((await prisma.pickerProjection("group-a", "alice", ["alice"])).titles).toEqual([]);
+  expect((await memory.pickerProjection("group-a", "alice", ["alice"])).titles).toEqual([]);
 });

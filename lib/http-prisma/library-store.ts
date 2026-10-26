@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prismaIdentityClient } from "./identity-store";
-import type { LibraryHistoryRepository, SavedTitleRecord } from "../repositories/contracts";
+import type { LibraryHistoryRepository, MetadataContext, MetadataContextClaim, MetadataContextInput, MetadataContextKind, PickerProjection, SavedTitleRecord } from "../repositories/contracts";
 import { inspectNoteDraft } from "../note-state";
 
 export type LibraryDraft = {
@@ -11,7 +11,7 @@ export type LibraryDraft = {
 };
 export type ProviderIdentity = { namespace: "youtube" | "kinopoisk_unofficial"; externalId: string };
 export type PersonalPatch = Partial<{ positionState: "unknown" | "not_started" | "in_progress"; nextSeason: number | null; nextEpisode: number | null; timestampSeconds: number | null; completed: boolean; rating: number | null; note: string | null }>;
-export type DurableReview = { handle: string; groupId: string; memberId: string; sessionId: string; expiresAt: string; payload: Record<string, unknown> };
+export type DurableReview = MetadataContext;
 /** A trusted request projection from #49. It is optional until #51 selects this adapter at runtime. */
 export type LibraryAccessContext = { accountId?: string; sessionHash?: string; contextRevision?: number };
 
@@ -19,6 +19,7 @@ const hash = (value: string) => createHash("sha256").update(value).digest("hex")
 const iso = (value: Date) => value.toISOString();
 const fixedMoods = new Set(["funny", "relaxing", "exciting", "dark", "emotional"]);
 const titleKey = (value: string) => value.normalize("NFKC").trim().replace(/\s+/gu, " ").toLocaleLowerCase();
+type StoredMetadataContext = { version: 1; kind: MetadataContextKind; scope: string; payload: Record<string, unknown> };
 
 export class PrismaLibraryError extends Error {}
 
@@ -164,30 +165,60 @@ export class PrismaLibraryRepository implements LibraryHistoryRepository {
     });
   }
 
-  async createReview(input: { groupId: string; memberId: string; sessionId: string; payload: Record<string, unknown>; expiresAt?: Date; access?: LibraryAccessContext }) : Promise<DurableReview> {
+  private contextPayload(value: string): StoredMetadataContext | null {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+      const context = parsed as Partial<StoredMetadataContext>;
+      if (context.version !== 1 || (context.kind !== "page" && context.kind !== "review") || typeof context.scope !== "string" || !context.scope || !context.payload || typeof context.payload !== "object" || Array.isArray(context.payload)) return null;
+      return context as StoredMetadataContext;
+    } catch { return null; }
+  }
+
+  async createMetadataContext(input: MetadataContextInput & { access?: LibraryAccessContext }): Promise<MetadataContext> {
     return this.write(async (tx) => {
       await this.liveMember(tx, input.groupId, input.memberId, input.access);
       await tx.metadataReview.deleteMany({ where: { expiresAt: { lte: iso(new Date()) } } });
+      const active = await tx.metadataReview.findMany({ where: { groupId: input.groupId, memberId: input.memberId, sessionId: input.sessionId, expiresAt: { gt: iso(new Date()) } } });
+      const parentHash = input.parentHandle ? hash(input.parentHandle) : null;
+      const superseded = active.filter((row) => row.handleHash !== parentHash && this.contextPayload(row.payload)?.scope === input.scope).map((row) => row.handleHash);
+      if (superseded.length) await tx.metadataReview.deleteMany({ where: { handleHash: { in: superseded } } });
+      if (input.parentHandle) {
+        const parent = await tx.metadataReview.findUnique({ where: { handleHash: parentHash! } });
+        const decoded = parent && this.contextPayload(parent.payload);
+        if (!parent || parent.groupId !== input.groupId || parent.memberId !== input.memberId || parent.sessionId !== input.sessionId || parent.expiresAt <= iso(new Date()) || decoded?.kind !== "page" || decoded.scope !== input.scope) throw new PrismaLibraryError("This review is no longer available.");
+        await tx.metadataReview.delete({ where: { handleHash: parentHash! } });
+      }
       const raw = randomBytes(32).toString("base64url"), expiresAt = input.expiresAt ?? new Date(Date.now() + 600000);
       const pending = await tx.metadataReview.count({ where: { groupId: input.groupId, memberId: input.memberId, sessionId: input.sessionId, expiresAt: { gt: iso(new Date()) } } });
       if (pending >= 20) throw new PrismaLibraryError("Too many pending metadata reviews.");
-      await tx.metadataReview.create({ data: { handleHash: hash(raw), groupId: input.groupId, memberId: input.memberId, sessionId: input.sessionId, expiresAt: iso(expiresAt), payload: JSON.stringify(input.payload) } });
-      return { handle: raw, groupId: input.groupId, memberId: input.memberId, sessionId: input.sessionId, expiresAt: iso(expiresAt), payload: input.payload };
+      const context: StoredMetadataContext = { version: 1, kind: input.kind, scope: input.scope, payload: input.payload };
+      await tx.metadataReview.create({ data: { handleHash: hash(raw), groupId: input.groupId, memberId: input.memberId, sessionId: input.sessionId, expiresAt: iso(expiresAt), payload: JSON.stringify(context) } });
+      return { handle: raw, groupId: input.groupId, memberId: input.memberId, sessionId: input.sessionId, expiresAt: iso(expiresAt), kind: input.kind, scope: input.scope, payload: input.payload };
     });
   }
 
-  async consumeReview(input: { handle: string; groupId: string; memberId: string; sessionId: string; access?: LibraryAccessContext }) {
-    return this.write(async (tx) => {
+  async consumeMetadataContext(input: MetadataContextClaim & { access?: LibraryAccessContext }, expectedKind: MetadataContextKind) {
+    const payload = await this.write(async (tx) => {
       await this.liveMember(tx, input.groupId, input.memberId, input.access);
       const handleHash = hash(input.handle);
       const review = await tx.metadataReview.findUnique({ where: { handleHash } });
       if (!review || review.groupId !== input.groupId || review.memberId !== input.memberId || review.sessionId !== input.sessionId) throw new PrismaLibraryError("This review is no longer available.");
-      if (review.expiresAt <= iso(new Date())) { await tx.metadataReview.delete({ where: { handleHash } }); throw new PrismaLibraryError("This review is no longer available."); }
+      if (review.expiresAt <= iso(new Date())) { await tx.metadataReview.delete({ where: { handleHash } }); return null; }
+      const context = this.contextPayload(review.payload);
+      if (!context) { await tx.metadataReview.delete({ where: { handleHash } }); return null; }
+      if (context.kind !== expectedKind) throw new PrismaLibraryError("This review is no longer available.");
       await tx.metadataReview.delete({ where: { handleHash } });
-      let payload: unknown; try { payload = JSON.parse(review.payload); } catch { throw new PrismaLibraryError("This review is no longer available."); }
-      return payload as Record<string, unknown>;
+      return context.payload;
     });
+    if (!payload) throw new PrismaLibraryError("This review is no longer available.");
+    return payload;
   }
+
+  async createPendingPage(input: Omit<MetadataContextInput, "kind"> & { access?: LibraryAccessContext }) { return this.createMetadataContext({ ...input, kind: "page" }); }
+  async consumePendingPage(input: MetadataContextClaim & { access?: LibraryAccessContext }) { return this.consumeMetadataContext(input, "page"); }
+  async createReview(input: { groupId: string; memberId: string; sessionId: string; payload: Record<string, unknown>; expiresAt?: Date; access?: LibraryAccessContext; scope?: string; parentHandle?: string }) : Promise<DurableReview> { return this.createMetadataContext({ ...input, kind: "review", scope: input.scope ?? "review" }); }
+  async consumeReview(input: MetadataContextClaim & { access?: LibraryAccessContext }) { return this.consumeMetadataContext(input, "review"); }
 
   async clearExpiredMetadata(at = new Date()) {
     return this.write(async (tx) => {
@@ -205,12 +236,12 @@ export class PrismaLibraryRepository implements LibraryHistoryRepository {
         if (Object.keys(clear).length) await tx.title.update({ where: { id: field.titleId }, data: clear });
         await tx.metadataField.update({ where: { titleId_field: { titleId: field.titleId, field: field.field } }, data: { cleared: true } });
       }
-      await tx.metadataReview.deleteMany({ where: { expiresAt: { lte: iso(at) } } });
-      return fields.length;
+      const expiredContexts = await tx.metadataReview.deleteMany({ where: { expiresAt: { lte: iso(at) } } });
+      return fields.length + expiredContexts.count;
     });
   }
 
-  async pickerProjection(groupId: string, actorMemberId: string, memberIds: string[], access?: LibraryAccessContext) {
+  async pickerProjection(groupId: string, actorMemberId: string, memberIds: string[], access?: LibraryAccessContext): Promise<PickerProjection> {
     await this.write((tx) => this.liveMember(tx, groupId, actorMemberId, access));
     const titles = await this.db.title.findMany({ where: { groupId, archived: false }, include: { titleMoods: { include: { mood: true } }, progress: true } });
     return { titles: titles.map((title) => ({ id: title.id, groupId: title.groupId, archived: title.archived, title: title.title, contentType: title.contentType, durationSeconds: title.durationSeconds, numberingStyle: title.numberingStyle, moods: title.titleMoods.map((m) => m.mood.code), createdAt: title.createdAt })), progress: titles.flatMap((title) => title.progress.filter((row) => memberIds.includes(row.memberId))) };

@@ -6,6 +6,11 @@
 export type Identity = { accountId: string; username: string };
 export type GroupContext = { groupId: string; memberId: string; generation: number };
 export type SavedTitleRecord = { id: string; groupId: string; archived: boolean };
+export type MetadataContextKind = "page" | "review";
+export type MetadataContext = { handle: string; kind: MetadataContextKind; groupId: string; memberId: string; sessionId: string; scope: string; expiresAt: string; payload: Record<string, unknown> };
+export type MetadataContextInput = { groupId: string; memberId: string; sessionId: string; kind: MetadataContextKind; scope: string; payload: Record<string, unknown>; expiresAt?: Date; parentHandle?: string };
+export type MetadataContextClaim = { handle: string; groupId: string; memberId: string; sessionId: string };
+export type PickerProjection = { titles: unknown[]; progress: unknown[] };
 
 /** Every #49 HTTP identity/group operation. #50 owns every omitted library path. */
 export type IdentityGroupOperationPath =
@@ -32,7 +37,13 @@ export interface LibraryHistoryRepository {
   list(groupId: string, actorMemberId: string, archived?: boolean, mine?: boolean): Promise<unknown[]>;
   removeContribution(groupId: string, memberId: string, titleId: string): Promise<{ archived: boolean; titleId: string }>;
   patchPersonal(groupId: string, memberId: string, titleId: string, patch: Record<string, unknown>): Promise<unknown>;
-  createReview(input: { groupId: string; memberId: string; sessionId: string; payload: Record<string, unknown>; expiresAt?: Date }): Promise<unknown>;
+  /** Pending metadata page/review snapshots are durable, owner-bound and one-time consumable. */
+  createMetadataContext(input: MetadataContextInput): Promise<MetadataContext>;
+  consumeMetadataContext(input: MetadataContextClaim, expectedKind: MetadataContextKind): Promise<Record<string, unknown>>;
+  clearExpiredMetadata(at?: Date): Promise<number>;
+  pickerProjection(groupId: string, actorMemberId: string, memberIds: string[]): Promise<PickerProjection>;
+  /** Legacy review aliases preserve the current service's review vocabulary. */
+  createReview(input: { groupId: string; memberId: string; sessionId: string; payload: Record<string, unknown>; expiresAt?: Date; scope?: string; parentHandle?: string }): Promise<unknown>;
   consumeReview(input: { handle: string; groupId: string; memberId: string; sessionId: string }): Promise<Record<string, unknown>>;
 }
 
