@@ -19,6 +19,7 @@
 - `pnpm db:verify:backup` - isolated WAL-aware snapshot/restore/expiry verification; never uses normal/demo storage
 - `pnpm prisma:identity:verify` - run isolated #49 Prisma identity/group persistence and authorization checks
 - `pnpm prisma:library:verify` - run isolated #50 Prisma library/history/provenance persistence checks
+- `pnpm prisma:cutover:verify` - run #51 isolated durable Prisma HTTP plus production-browser restart checks
 - `pnpm verify:fresh-checkout` - from clean committed source, install and verify the documented setup/dev/production/demo/tests in an owned temporary local clone; see `_docs/enhancement-audit.md`
 - `pnpm start` - serve the production build locally
 

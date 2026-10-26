@@ -3,6 +3,7 @@ import { AuthError, checkPassword, makePassword, passwordInput, security, userna
 import { ProcessMemoryRepository } from "./repository";
 import { resetPrismaIdentityForTests } from "../http-prisma/identity-store";
 import { handlePrismaIdentity } from "../http-prisma/identity-service";
+import { handlePrismaApplication } from "../http-prisma/application-service";
 import { safeExternalUrl } from "../urls";
 import { youtubeProvider } from "../metadata/youtube-transport";
 import { kinopoiskUnofficialProvider } from "../metadata/kinopoisk-transport";
@@ -39,7 +40,9 @@ type MemoryProviders={youtube:MetadataProvider;kinopoisk_unofficial:MetadataProv
 type MemoryTransports={youtube?:typeof fetch;kinopoisk_unofficial?:typeof fetch};
 let transportOverride:MemoryTransports|undefined;
 const fixtureTransport:typeof fetch=async(input)=>{const url=new URL(typeof input==="string"?input:input instanceof URL?input.href:input.url);if(url.hostname.includes("googleapis.com")){const id=url.searchParams.get("id")??"AbCdEf12345";if(url.pathname.endsWith("/search"))return Response.json({items:[{id:{kind:"youtube#video",videoId:"AbCdEf12345"}}]});return Response.json({items:[{id,snippet:{title:"HTTP fixture YouTube",channelTitle:"Fixture channel",liveBroadcastContent:"none",thumbnails:{high:{url:"https://i.ytimg.com/vi/AbCdEf12345/hqdefault.jpg"}}},contentDetails:{duration:"PT2M"}}]});}if(url.hostname.includes("kinopoiskapiunofficial")){if(url.searchParams.has("keyword"))return Response.json({items:[{kinopoiskId:424242,nameRu:"HTTP fixture Kinopoisk",year:2024,type:"FILM",genres:[{genre:"Comedy"}],posterUrlPreview:"https://kinopoiskapiunofficial.tech/images/posters/kp/424242.jpg",webUrl:"https://www.kinopoisk.ru/film/424242/"}],totalPages:1});return Response.json({kinopoiskId:424242,nameRu:"HTTP fixture Kinopoisk",year:2024,type:"FILM",filmLength:95,genres:[{genre:"Comedy"}],posterUrl:"https://kinopoiskapiunofficial.tech/images/posters/kp/424242.jpg",webUrl:"https://www.kinopoisk.ru/film/424242/"});}return new Response("{}",{status:404});};
-const metadataProviders=()=>{const fixtures=process.env.WATCHNEXT_HTTP_METADATA_FIXTURES==="1",transports=transportOverride??(fixtures?{youtube:fixtureTransport,kinopoisk_unofficial:fixtureTransport}:{});return{youtube:youtubeProvider({apiKey:fixtures?"fixture-key":process.env.YOUTUBE_API_KEY,transport:transports.youtube}),kinopoisk_unofficial:kinopoiskUnofficialProvider({apiKey:fixtures?"fixture-key":process.env.KINOPOISK_UNOFFICIAL_API_KEY,transport:transports.kinopoisk_unofficial})};};
+/** Server-only metadata provider factory shared by the Prisma HTTP composition. */
+export const metadataProvidersForHttp=()=>{const fixtures=process.env.WATCHNEXT_HTTP_METADATA_FIXTURES==="1",transports=transportOverride??(fixtures?{youtube:fixtureTransport,kinopoisk_unofficial:fixtureTransport}:{});return{youtube:youtubeProvider({apiKey:fixtures?"fixture-key":process.env.YOUTUBE_API_KEY,transport:transports.youtube}),kinopoisk_unofficial:kinopoiskUnofficialProvider({apiKey:fixtures?"fixture-key":process.env.KINOPOISK_UNOFFICIAL_API_KEY,transport:transports.kinopoisk_unofficial})};};
+const metadataProviders=metadataProvidersForHttp;
 const origin=()=>process.env.WATCHNEXT_APP_ORIGIN??"http://127.0.0.1:3000";
 const error=(status:number,code:string,message:string,retryable=false)=>json({error:{code,message,retryable}},status);
 const context=(mode:"anonymous"|"account"|"legacy",revision=0,groupId:string|null=null)=>({revision,mode,groupId});
@@ -189,8 +192,8 @@ export function resetHttpMemoryForTests(){repository().reset();transportOverride
 
 function prismaMode() { return process.env.WATCHNEXT_HTTP_REPOSITORY === "prisma"; }
 
-/** #49 composition seam: selected identity/group routes execute direct Prisma repositories. */
+/** #51 server-only composition seam: a Prisma selection owns the complete HTTP surface. */
 export async function handleMemory(request: Request, path: string[]): Promise<Response> {
-  if (prismaMode()) return handlePrismaIdentity(request, path);
+  if (prismaMode()) return handlePrismaApplication(request, path);
   return handleMemoryInProcess(request, path);
 }

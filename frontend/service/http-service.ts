@@ -96,7 +96,7 @@ const http = () => {
     rotate: (generation: number, x: ContextIdentity, o?: RequestOptions) => request("groups/current/invitations/rotate", "POST", { generation, confirmed: true, ...expected(x) }, o, data => ({ invite: String(data.invite ?? ""), kind: "account" as const })),
     createLegacy: (name: string, x: ContextIdentity, o?: RequestOptions) => request("legacy/groups", "POST", { name, ...expected(x) }, o, data => ({ invite: String(data.invite ?? ""), kind: "legacy" as const })),
     createProfile: (name: string, color: AvatarColor, x: ContextIdentity, o?: RequestOptions) => request("legacy/groups/current/profiles", "POST", { name, color, ...expected(x) }, o, workspace),
-    selectProfile: (profileId: string, x: ContextIdentity, o?: RequestOptions) => request("legacy/groups/current/profiles/selection", "PUT", { profileId, ...expected(x) }, o, workspace),
+    selectProfile: (profileId: string, x: ContextIdentity, o?: RequestOptions) => request("legacy/context/profile", "PUT", { profileId, ...expected(x) }, o, workspace),
   },
   library: {
     list: (filter: unknown, archived: boolean, x: ContextIdentity, o?: RequestOptions) => { const f = libraryFilter(filter).filter; return request(`library${archived ? "/archive" : ""}?filter=${archived ? "all" : f}`, "GET", undefined, o, data => ({ mode: data.mode === "legacy" ? "legacy" as const : "account" as const, filter: f, archived, notice: null, items: Array.isArray(data.items) ? data.items.map(title) : [] })); },

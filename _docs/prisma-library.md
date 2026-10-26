@@ -10,4 +10,4 @@ Provider-field expiry clears only still-provider-owned values and provenance row
 
 Run `pnpm prisma:library:verify` for the isolated adapter suite. It creates only temporary native `0001`–`0005` files, includes concurrent-client/rollback, pending-page lifecycle, adapter parity and populated-fixture preservation checks, and never reads or initializes normal local storage. The suite is the adapter boundary verification, not a production-runtime selector.
 
-The production HTTP selection remains deliberately unchanged in #50. #51 switches the complete route set only after both identity and library adapters have passed their isolated preservation and race checks.
+In #51 `WATCHNEXT_HTTP_REPOSITORY=prisma` selects this repository together with the #49 identity/group adapter for the complete HTTP route. The selected route never falls back to the process-memory repository. See [Prisma identity/runtime operation](prisma-identity.md) and the [backup/restore runbook](backup-restore.md).

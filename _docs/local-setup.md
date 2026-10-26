@@ -28,6 +28,22 @@ $env:WATCHNEXT_DATABASE_PATH = Join-Path $env:LOCALAPPDATA 'WatchNext Academic\m
 
 Do not change databases while a server is running. Stop it first, select the intended file, initialize if needed and restart. Switching paths does not move/merge old data. See [database paths and migrations](database.md).
 
+### Durable Prisma HTTP mode
+
+The default HTTP demonstration is explicitly process-memory. To run the complete persistent Prisma application, first initialize the same owned native SQLite file, then select Prisma **only in the server terminal**:
+
+```powershell
+$path = Join-Path $env:LOCALAPPDATA 'WatchNext\watchnext.sqlite'
+$env:WATCHNEXT_DATABASE_PATH = $path
+$env:WATCHNEXT_APP_ORIGIN = 'http://127.0.0.1:3000'
+pnpm db:init
+$env:WATCHNEXT_HTTP_REPOSITORY = 'prisma'
+$env:WATCHNEXT_HTTP_PRISMA_DATABASE_URL = "file:$($path.Replace('\','/'))"
+pnpm dev
+```
+
+The two selectors are not client settings. Do not put them in a URL, cookie or `NEXT_PUBLIC_` variable. Prisma requires the initialized immutable `0001`–`0005` native ledger and has no fallback to process memory or the old direct SQLite HTTP path. To return to an explicitly ephemeral session, stop the server, remove both `WATCHNEXT_HTTP_*` variables and start again. The memory mode never migrates, copies or replaces the durable file. Before upgrading an existing native file, follow the owned-copy procedure in [Prisma baseline](prisma-baseline.md) and [backup/restore](backup-restore.md).
+
 On macOS/Linux use the same commands with shell assignments. This example deliberately selects a quoted local home path rather than relying on OS defaults:
 
 ```sh

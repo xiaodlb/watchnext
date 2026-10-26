@@ -31,4 +31,4 @@ For a fresh owned disposable file, execute the baseline SQL through Prisma and t
 4. Verify native `schema_migrations` has exactly `0001`–`0005` with original checksums; verify hashes, identities, history, metadata fields/reviews, invitations, membership/context generations and `PRAGMA foreign_key_check`.
 5. On any failure, stop. The source and backup remain reviewable. Discard the working copy. The concrete rollback is to make a **new** working copy from the untouched backup; never overwrite the backup or silently replace a normal database.
 
-No normal operational command switches to Prisma in #48. #51 may choose a durable runtime only after #49 and #50 provide complete repository implementations and independent QA accepts it.
+Issue #51 now selects the complete durable runtime only after this native-ledger baseline has been applied to an owned copy and inspected. Its server-only selector/runbook is in [prisma-identity.md](prisma-identity.md); this baseline procedure remains copy-first and never permits `db push` or reset.
