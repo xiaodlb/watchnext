@@ -20,9 +20,8 @@ export type PrismaIdentitySnapshot = {
 };
 
 const url = () => {
-  if (process.env.WATCHNEXT_HTTP_PRISMA_ISOLATED !== "1") throw new Error("Prisma HTTP identity mode is limited to an explicitly isolated owned database in #49.");
   const configured = process.env.WATCHNEXT_HTTP_PRISMA_DATABASE_URL;
-  if (!configured || !configured.startsWith("file:")) throw new Error("Prisma HTTP mode requires WATCHNEXT_HTTP_PRISMA_DATABASE_URL=file:<owned temporary database>.");
+  if (!configured || !configured.startsWith("file:")) throw new Error("Prisma HTTP mode requires a server-only WATCHNEXT_HTTP_PRISMA_DATABASE_URL=file:<absolute owned database>.");
   return configured;
 };
 
@@ -40,7 +39,7 @@ export function prismaIdentityClient() {
 export function verifyPrismaIdentitySQLiteAdapter() {
   const databaseUrl = url();
   const filename = decodeURIComponent(databaseUrl.slice("file:".length).split("?")[0]).replace(/^\/+([A-Za-z]:)/, "$1");
-  if (!filename || !/^[A-Za-z]:[\\/]|^\//.test(filename)) throw new Error("Prisma HTTP identity mode requires an absolute owned file path.");
+  if (!filename || !/^[A-Za-z]:[\\/]|^\//.test(filename)) throw new Error("Prisma HTTP mode requires an absolute owned file path.");
   const db = new DatabaseSync(filename, { open: false });
   try {
     db.open(); db.exec("PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON;");

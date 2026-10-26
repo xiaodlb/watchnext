@@ -37,6 +37,16 @@ pnpm build
 pnpm start
 ```
 
+For the Prisma-selected server, point both server settings to that **restored** new file before starting; do not point Prisma at the original while inspecting a restore:
+
+```powershell
+$env:WATCHNEXT_HTTP_REPOSITORY = 'prisma'
+$env:WATCHNEXT_HTTP_PRISMA_DATABASE_URL = "file:$($restored.Replace('\','/'))"
+pnpm start
+```
+
+For a native-to-Prisma cutover, work only on a new snapshot copy: (1) stop writers and snapshot the existing initialized native file, (2) copy that snapshot again to a new owned working path, (3) with `DATABASE_URL` set to the working copy, run `prisma migrate resolve --applied 20261025000000_native_sqlite_baseline`, and (4) inspect IDs, native `schema_migrations`, accounts/password hashes, memberships, titles/history and `PRAGMA foreign_key_check` before selecting Prisma. Never run `prisma db push` or `prisma migrate reset`. If anything fails, stop using the working copy and make a new copy from the untouched backup; rollback means selecting the untouched original/backup in a stopped server, never overwriting either file.
+
 Open http://127.0.0.1:3000 and sign in/select an active account group; for separate legacy groups rejoin with the privately retained invitation and select a name. Initialization validates/applies legitimate current migrations; the same-revision repeat is a no-op. Maintenance must complete before presentation; repeat it deliberately if a large pending batch remains. Keep original and backup untouched while inspecting the restored copy. To resume the original later, stop this server and explicitly select the original `$source`; no file is moved/merged. Do not copy old sidecars onto the new standalone snapshot. Never delete an unfamiliar journal to make SQLite open.
 
 Backups include versioned password hashes/salts/parameters, recovery digests, account-session hashes/expiry/revocation/context revisions, owners/membership status/removal/invite generations, group/profile/history, invitation/session **hashes**, imported fields and their original provenance/deadlines. They do not contain recoverable plaintext invite links or optional environment keys. Keep any needed raw link and optional key configuration privately and separately; neither Git nor issue attachments is an access delivery channel. A restored session is not verified identity, and old browser credentials/revocation state may differ from the live original. Rejoin/reselect deliberately; expired/invalid review or cycle handles require a new lookup/pick.
