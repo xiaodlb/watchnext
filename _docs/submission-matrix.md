@@ -1,25 +1,63 @@
-# Graded submission matrix — source-mapped living evidence
+# Graded MVP submission matrix
 
-October 19, 2026 · #41 documents references/coverage; **#42 mock architecture and later stages are not delivered by this matrix**. Teacher excerpts and source gaps are in [brainstorming-evidence.md](brainstorming-evidence.md). Deadline remains **unknown**. No grade guarantee, fabricated issue count, user test or QA closure is claimed.
+This is a truthful map of the teacher requirements to the current repository state. It distinguishes implemented evidence, automation, real human observations and external prerequisites. It does not promise a grade or invent an unrecorded user test.
 
-Status vocabulary: **observed** means an identified screen/source was actually inspected; **documented** means a specification/plan exists; **implemented/tested** needs its exact code/command/issue evidence; **user-confirmed** needs actual human hands-on feedback. A reference screenshot is not a test of our application, and completed native-SQL baseline is not proof of a new mock/HTTP/ORM architecture.
+**Reviewed main revision:** `a8da187cf0891354f243b9f32f47b8c1cb8dbab9` (October 26, 2026). The later submission-preparation branch will replace this line with its merged revision only after the remaining human prerequisite is complete.
 
-| Teacher requirement from supplied conversation | Artifact / owning stage | Current evidence and remaining gate |
+## Delivery evidence
+
+| Teacher requirement | Evidence | Status |
 | --- | --- | --- |
-| Use GitHub Issues and the specification/role workflow | [specification](specification.md), [process](process.md), [task index](tasks.md), #41-#54 | Documented; existing #1–#40 QA history preserved. New work follows PM → Engineer → independent QA; QA closes mvp/user-test-bug only after actual PASS. #41, #42 and #55–#60 have independent QA acceptance; #61 integration is Engineer-tested with independent QA pending. |
-| Non-generic design tool OR good references | [Lovable preview/capture pack](design-references.md), [full operation inventory](operation-inventory.md), #41/#42 | Observed public sign-in at 375px / 1280px and desktop library/Add/Pick; original screenshots committed with exact labels. **Tested (automation):** the implemented `/mock` screens are captured as 14 synthetic PNGs (seven families at 375/1280) and compared family by family in [reference versus implemented (#61)](design-references.md#reference-versus-implemented-61); groups, legacy, detail and all mobile post-login screens have no reference and follow the baseline. No fidelity claim and no paid v0/Claude Design/export claim. |
-| Complete frontend with mockService first | A/G/L/W/M/P/K and client-only U inventory; #42 foundation, #55–#61 | **Tested (automation):** all 40 domain operations and U01–U06 run through one typed mock service at `/mock` ([coverage matrix](mock-integration.md#coverage-matrix), checked by `tests/frontend/coverage.test.ts`), with a connected two-width journey and a per-method stale/cancel/failure sweep. #42 and #55–#60 are QA-accepted; #61 integration is Engineer-tested and awaits independent QA, so the phase is not closed yet. **User-confirmed:** not yet; human hands-on testing is #53. Existing accessible production UI supplies baseline, not this phase proof. All modes/data must be isolated. |
-| Root openapi.yml contract | Inventory operation IDs + full typed service from #42/#55–#61; #43 | Planned; root file not created and no placeholder claimed. Must describe all requests/results/auth/errors and explicitly distinguish client-only/internal operations. |
-| Backend in-memory stage | Domain HTTP #44 identity/groups, #45 library/providers, #46 personal/picker; #47 interim full UI wiring | Planned; real server auth/guards and actual memory loss on restart required. Mock persona switching is not security proof. #47 tests the connection early, consistent with the article; it is not final persistence delivery. |
-| Persistent sqlLite with database-agnostic ORM tools | #48 mappings/data-safe baseline, #49 identity/groups, #50 library/history, #51 full durable HTTP integration | Planned; current app uses native SQLite, not Prisma. #51 repeats the same complete frontend contract over real repositories with restart/upgrade/backup/expiry/constraint evidence. Enumerate genuine SQLite-specific SQL/trigger/secure-deletion limits, not claim portability from schema generation. |
-| Connect frontend/backend as a working whole | #47 memory bridge, **#51 final SQLite integration**, #53 hands-on, #54 hand-in | Planned new-stage proof. The rubric's final connection is satisfied only by the durable end-to-end stage, not by leaving the UI on mocks or treating #47 as the finished app. |
-| All Markdown in repository, improved during development | Tracked AGENTS/README/_docs and issue-specific updates | Baseline documents plus this inventory/reference/matrix/source pack are committed. Future phases must update actual modes/commands/evidence instead of leaving planned text as delivery claims. No private environment/database/secret artifacts belong in Git. |
-| Brainstorming chat as Markdown | [Available excerpts/source inventory](brainstorming-evidence.md); #54 authentic export if available | Genuine original excerpts and user-supplied rubric recorded. **Full original conversation export unavailable**; missing assistant turns cannot be reconstructed from numeric answers. This gap is not falsely marked complete. |
-| Actually run/test app, iterate until working | Baseline [enhancement audit](enhancement-audit.md); #42-#51 stage checks; #53 [hands-on checklist](manual-testing.md), [iteration log](iteration-log.md) | Baseline tested through 958 tests and actual E2E at its accepted revision; not evidence that future architecture or new human testing is done. #41 docs checks only; mock-phase runtime evidence is in the complete-frontend row above, and new human evidence remains pending (#53). |
-| Genuine bug issue Goal/Description → PM → QA regressions → Engineer → QA | [Bug template](user-test-bug-template.md), team roles, process; actual user-test-bug issues when reported | Workflow documented. QA adds concrete red regression before Engineer repair, then independently verifies. No fake bug quota, speculative issue flood or invented hands-on outcome. |
-| Close mvp/user-test-bug via qa-engineer before deadline; post-mvp separate | Live issue labels/QA comments; #53/#54 | **Pending actual phase completion/QA**. Up to 100 is permitted, not a minimum. Existing #1–#40 remain closed; #41-#54 creation is not closure. No deadline date supplied. Optional #52 PostgreSQL is post-mvp, not a dependency for #53/#54 or mandatory grading gate. |
-| Inspect linked teaching sites | [Public article URLs and access record](design-references.md), teacher text/source inventory | Observed public pages on October 19; used staged-service/contract/issue guidance. Example FastAPI/SQLAlchemy is not a mandate to replace Next.js/TypeScript. |
+| GitHub Issues plus PM → Engineer → independent QA process | [_docs/process.md](process.md), [roles](team/), issue index [_docs/tasks.md](tasks.md), and QA closures [#41](https://github.com/xiaodlb/watchnext/issues/41)–[#51](https://github.com/xiaodlb/watchnext/issues/51) | Implemented and issue-auditable. |
+| Design reference from a non-generic design tool | [Lovable reference record](design-references.md), committed comparison/evidence images under `_docs/evidence/lovable-alignment/`, merged [PR #64](https://github.com/xiaodlb/watchnext/pull/64) | Implemented reference-led visual work. It is a similar visual language, not a pixel-for-pixel claim. |
+| Frontend → typed mock service iteration | [Mock frontend](mock-frontend.md), [operation inventory](operation-inventory.md), [mock integration](mock-integration.md), #41–#42 and #55–#61 issue history | Implemented and automated; it is not human testing. |
+| Versioned OpenAPI contract | [openapi.yml](../openapi.yml), [API guide](api.md), merged [PR #65](https://github.com/xiaodlb/watchnext/pull/65), QA-closed [#43](https://github.com/xiaodlb/watchnext/issues/43) | Implemented. |
+| In-memory HTTP iteration | QA-closed [#44](https://github.com/xiaodlb/watchnext/issues/44), [#45](https://github.com/xiaodlb/watchnext/issues/45), [#46](https://github.com/xiaodlb/watchnext/issues/46), [#47](https://github.com/xiaodlb/watchnext/issues/47); [HTTP UI map](http-ui.md) | Implemented and kept as an explicit stage of the history. |
+| SQLite plus DBMS-agnostic ORM | [Prisma baseline](prisma-baseline.md), [constraint inventory](prisma-constraint-inventory.md), [repository boundaries](repository-boundaries.md), QA-closed [#48](https://github.com/xiaodlb/watchnext/issues/48)–[#51](https://github.com/xiaodlb/watchnext/issues/51), merged [PRs #66–#69](https://github.com/xiaodlb/watchnext/pulls?q=is%3Apr+is%3Aclosed+%2366+OR+%2367+OR+%2368+OR+%2369) | Implemented for the required SQLite delivery. |
+| Final connected frontend/backend | [#47](https://github.com/xiaodlb/watchnext/issues/47) proves the interim HTTP UI; [#51 QA evidence](https://github.com/xiaodlb/watchnext/issues/51#issuecomment-6411272282) proves the durable Prisma HTTP path and browser restart | Implemented and automated. |
+| Markdown records in the repository | `AGENTS.md`, `_docs/`, specifications, runbooks, evidence files and this matrix | Implemented. No ordinary databases, secrets or credentials are included. |
+| Brainstorming chat evidence | [brainstorming-evidence.md](brainstorming-evidence.md) | Partial authentic excerpts only. A complete original export is unavailable and is not reconstructed. |
+| Automated execution and testing | [testing-guidelines.md](testing-guidelines.md), [iteration log](iteration-log.md), individual issue QA comments | Implemented automation. The exact commands below are reproducible. |
+| Genuine hands-on testing and user-test-bug workflow | [manual checklist](manual-testing.md), [user-test bug template](user-test-bug-template.md), [#53](https://github.com/xiaodlb/watchnext/issues/53) | **Pending a real human run.** No invented observations or fake bugs are recorded. |
+| Close all `mvp` and `user-test-bug` labels | GitHub issues #41–#51 are closed; [#53](https://github.com/xiaodlb/watchnext/issues/53) and [#54](https://github.com/xiaodlb/watchnext/issues/54) remain open | **Pending #53 and #54.** There are currently zero genuine `user-test-bug` issues. |
+| Optional PostgreSQL portability | [#52](https://github.com/xiaodlb/watchnext/issues/52) and its runbook | Post-MVP and optional. Its local Docker prerequisite was unavailable when last checked; it is not represented as executed. |
 
-Baseline reference/tag: **441fcaae660e273d6fc373f8757be562d9139b78 / graded-baseline-2026-10-19**, verified locally. Do not reopen or relabel historical accepted issues to fabricate a new count. The frontend authorization covers #41 and #42 after prerequisites; later phases remain planned until authorized. A final #54 hand-in must list exact revisions/commands/artifacts, real QA closures, real human observations and unresolved source gaps plainly.
+## Iteration and merge trail
 
-Current frontend status: #42 and #55–#60 are independently QA-accepted; [#61 integration and evidence](mock-integration.md) is Engineer-tested with independent QA pending, and the typed contract for #43 is in [frontend contract handoff](frontend-contract-handoff.md). No backend, OpenAPI or ORM stage is implemented, and no human user testing is claimed.
+1. Lovable-style visual alignment: [PR #64](https://github.com/xiaodlb/watchnext/pull/64).
+2. Contract, in-memory backend and typed HTTP UI: [PR #65](https://github.com/xiaodlb/watchnext/pull/65), including #43–#47.
+3. Prisma mapping baseline: [PR #66](https://github.com/xiaodlb/watchnext/pull/66), #48.
+4. Prisma identity/groups: [PR #67](https://github.com/xiaodlb/watchnext/pull/67), #49.
+5. Prisma library/history/metadata: [PR #68](https://github.com/xiaodlb/watchnext/pull/68), #50.
+6. Durable Prisma SQLite cutover, backup/restore and restart checks: [PR #69](https://github.com/xiaodlb/watchnext/pull/69), #51.
+
+The original pre-graded reference remains tag `graded-baseline-2026-10-19` at `441fcaae660e273d6fc373f8757be562d9139b78`.
+
+## Reproducible clean-checkout verification
+
+Use a clean checkout, Node.js 24.x and pnpm 11.25.0. The detailed setup and private database handling are in [local setup](local-setup.md), [database](database.md) and [backup/restore](backup-restore.md).
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm prisma:check
+pnpm prisma:baseline:verify
+pnpm prisma:identity:verify
+pnpm prisma:library:verify
+pnpm prisma:cutover:verify
+pnpm db:verify
+pnpm db:verify:backup
+pnpm contract:verify
+pnpm test
+pnpm typecheck
+pnpm build
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
+
+Run manual testing only with synthetic data in a separate, owned database. The checklist records tester, date, revision, expected result and actual observation for every case. A genuine observed bug must use the template, receive the `user-test-bug` label, PM grooming, QA regression coverage, an Engineer repair and a final QA PASS before closure.
+
+## Remaining prerequisites before hand-in
+
+- Complete #53 with a real person’s manual observations. If the person finds a real bug, create and resolve the corresponding `user-test-bug` issue; if not, record zero actual bugs.
+- Update the reviewed revision and status rows after #53, run the final documented commands at that revision, and obtain #54 QA PASS.
+- #52 remains optional post-MVP. If Docker Desktop/Compose becomes available, run its documented disposable PostgreSQL verification and update its own evidence. Do not block the required SQLite submission or misstate PostgreSQL as tested.

@@ -82,3 +82,7 @@ For a separate **legacy-mode** synthetic presentation database, run `pnpm demo:p
 Open `/mock` on your own local server for an explicitly labeled synthetic preview of the whole frontend over one typed mock service; `/` remains the real app. No database initialization or provider key is needed. Accounts, groups/legacy, library, Add/review, personal records and the picker are implemented (#42 and #55–#60 QA-accepted); the #61 integration and evidence are Engineer-tested with independent QA pending. It does not provide real authentication or replace the completed app. [Launch, reset/lifetime and verification](_docs/mock-frontend.md) · [integration evidence](_docs/mock-integration.md).
 
 `pnpm test:mock` builds current source and checks the isolated foundation/production-default boundary with pinned Chromium; install it first with `pnpm exec playwright install chromium`. Never build into somebody else's running output.
+
+## Submission evidence
+
+See [_docs/submission-evidence.md](_docs/submission-evidence.md) for the traceable graded-MVP evidence index and honest pending prerequisites.
