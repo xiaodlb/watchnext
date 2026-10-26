@@ -28,6 +28,12 @@ export interface IdentityGroupRepository {
 export interface LibraryHistoryRepository {
   readTitle(groupId: string, titleId: string): Promise<SavedTitleRecord | null>;
   saveSharedTitle(input: { groupId: string; memberId: string; title: SavedTitleRecord }): Promise<SavedTitleRecord>;
+  /** #50 adapters provide durable list/save/history/review operations without exposing a database handle. */
+  list(groupId: string, actorMemberId: string, archived?: boolean, mine?: boolean): Promise<unknown[]>;
+  removeContribution(groupId: string, memberId: string, titleId: string): Promise<{ archived: boolean; titleId: string }>;
+  patchPersonal(groupId: string, memberId: string, titleId: string, patch: Record<string, unknown>): Promise<unknown>;
+  createReview(input: { groupId: string; memberId: string; sessionId: string; payload: Record<string, unknown>; expiresAt?: Date }): Promise<unknown>;
+  consumeReview(input: { handle: string; groupId: string; memberId: string; sessionId: string }): Promise<Record<string, unknown>>;
 }
 
 /** Adapter-local operations which Prisma does not replace. #49/#50 use these through SQLite adapters. */

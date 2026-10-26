@@ -18,6 +18,7 @@
 - `pnpm db:snapshot '<absolute source>' '<new absolute destination>'` - explicit private SQLite-consistent snapshot/restore; read `_docs/backup-restore.md`, never overwrite an existing destination
 - `pnpm db:verify:backup` - isolated WAL-aware snapshot/restore/expiry verification; never uses normal/demo storage
 - `pnpm prisma:identity:verify` - run isolated #49 Prisma identity/group persistence and authorization checks
+- `pnpm prisma:library:verify` - run isolated #50 Prisma library/history/provenance persistence checks
 - `pnpm verify:fresh-checkout` - from clean committed source, install and verify the documented setup/dev/production/demo/tests in an owned temporary local clone; see `_docs/enhancement-audit.md`
 - `pnpm start` - serve the production build locally
 

@@ -27,7 +27,8 @@
     "contract:verify": "node scripts/verify-openapi.mjs",
     "prisma:check": "node scripts/prisma/check.mjs",
     "prisma:baseline:verify": "node scripts/prisma/verify-baseline.mjs",
-    "prisma:identity:verify": "vitest run tests/prisma/identity-adapter.test.ts"
+    "prisma:identity:verify": "vitest run tests/prisma/identity-adapter.test.ts",
+    "prisma:library:verify": "vitest run tests/prisma/library-adapter.test.ts"
   },
   "engines": {
     "node": ">=24.15.0 <25"
