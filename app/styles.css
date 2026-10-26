@@ -221,6 +221,11 @@ body:has(.auth-page) { padding-bottom: 0; }
 .watchlist-card { height: 100%; grid-template-columns: 6.25rem minmax(0, 1fr); gap: 1rem; padding: .75rem; border-radius: .9rem; box-shadow: 0 1px 2px #17233b0a; transition: transform .15s ease, box-shadow .15s ease; }
 .watchlist-card:hover { transform: translateY(-1px); box-shadow: 0 7px 18px #17233b12; }
 .watchlist-card .title-cover { align-self: stretch; min-height: 9.25rem; }
+.watchlist-card .title-cover.video-cover {
+  align-self: start;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+}
 .watchlist-metadata { display: flex; flex-direction: column; }
 .watchlist-metadata h2 { font-size: 1.05rem; letter-spacing: -.02em; }
 .watchlist-metadata p { margin: .14rem 0; color: var(--color-muted); font-size: .86rem; line-height: 1.45; }
@@ -250,6 +255,11 @@ body:has(.auth-page) { padding-bottom: 0; }
 /* Detail keeps a 288px cover column on large screens and stacks cleanly. */
 .detail-metadata { grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr); gap: 2rem; max-width: 100%; }
 .detail-metadata > .title-cover { min-height: 23rem; }
+.detail-metadata > .title-cover.video-cover {
+  align-self: start;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+}
 .detail-metadata h2 { font-size: 1.35rem; }
 .detail-metadata dt { margin-top: .7rem; color: var(--color-muted); font-size: .72rem; letter-spacing: .07em; text-transform: uppercase; }
 .detail-metadata dd { margin-bottom: .35rem; }
