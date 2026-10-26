@@ -80,6 +80,16 @@ it("keeps an authorized YouTube entry in the reference-style card grid with its 
  expect(cover?.className).toContain("video-cover");
  expect(within(card).getByText("YouTube video")).toBeTruthy();
 });
+it("uses the active viewer's real progress as the source-style card status",()=>{
+ render(<WatchlistContent view={{activeMemberId:"anna",items:[
+   {...fixture,id:"film",progress:null},
+   {...fixture,id:"series",contentType:"series",numberingStyle:"season_episode",progress:{positionState:"in_progress",nextSeason:2,nextEpisode:4,timestampSeconds:null,completed:false}},
+   {...fixture,id:"done",progress:{positionState:null,nextSeason:null,nextEpisode:null,timestampSeconds:null,completed:true}},
+ ]}}/>);
+ expect(screen.getByText("Not started")).toBeTruthy();
+ expect(screen.getByText("Next: S2 · E4")).toBeTruthy();
+ expect(screen.getByText("✓ Watched")).toBeTruthy();
+});
 it("storage retry keeps a requested Mine mode without replacing the current URL",()=>{
  render(<WatchlistLoadError filter="mine"/>);expect(screen.getByText("Your Added by me request is kept when you retry.")).toBeTruthy();fireEvent.click(screen.getByRole("button",{name:"Try again"}));expect(refresh).toHaveBeenCalledTimes(1);
 });
