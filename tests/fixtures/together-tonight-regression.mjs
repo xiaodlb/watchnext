@@ -55,8 +55,9 @@ async function showSearchControls(page) {
   current = "show real add search controls";
   await page.goto(fixture.origin + "/watchlist/add");
   await field(page, "Entry method").selectOption("kinopoisk_unofficial");
-  await field(page, "Title to search").waitFor();
-  await page.getByRole("button", { name: "Search titles", exact: true }).waitFor();
+  await field(page, "Title to search").fill("source composition");
+  await press(page, "Search titles");
+  await page.getByRole("region", { name: "Search results", exact: true }).waitFor();
   check(await page.locator(".form-fields").count() >= 1, "the real source-style search and manual-entry surface");
 }
 
@@ -64,6 +65,12 @@ async function captureComposition(page, name) {
   const path = join(fixture.root, `${name}.png`);
   await page.screenshot({ path, fullPage: true });
   check(existsSync(path) && statSync(path).size > 10_000, `a real ${name} screenshot capture`);
+}
+
+async function boundedSurface(page, selector, label, maximum = 800) {
+  const surface = await box(page.locator(selector));
+  check(surface.width <= maximum, `${label} is a bounded source-style working surface; observed ${Math.round(surface.width)}px`);
+  check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${label} has no horizontal clipping`);
 }
 
 async function gridMetrics(page, expectedColumns, width) {
@@ -93,6 +100,7 @@ async function desktop(page, film, video) {
   await page.goto(fixture.origin + "/"); const card = page.locator(".auth-card"); await card.waitFor();
   const auth = await box(card), viewport = page.viewportSize(); check(Math.abs(auth.x + auth.width / 2 - viewport.width / 2) < 4, "a centred Together Tonight-style account card at 1280px");
   check(await page.locator(".site-header").isVisible() === false, "no application header on account entry");
+  await captureComposition(page, "sign-in-1280");
   await page.goto(fixture.origin + "/watchlist"); await page.getByRole("heading", { name: "Visual regression group", exact: true }).waitFor();
   await page.getByRole("link", { name: "Add title", exact: true }).waitFor(); await page.getByRole("navigation", { name: "Watchlist filter" }).waitFor();
   await page.getByLabel("Content type filter").getByRole("button", { name: "Movies" }).waitFor();
@@ -107,13 +115,16 @@ async function desktop(page, film, video) {
   check(await firstCard.getByText(/(Not started|Next:|Watched)/).count() > 0, "a visible progress state on each source-style card");
   check(await firstCard.locator(".contributor-list .avatar").count() > 0, "a visible contributor avatar below each source-style card");
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "no desktop horizontal clipping");
+  await page.goto(fixture.origin + "/watchlist/add");
+  await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "desktop add form"); await captureComposition(page, "add-1280");
   await showSearchControls(page);
-  await page.goto(fixture.origin + `/watchlist/${film}`); const portrait = page.locator(".detail-metadata > .title-cover"); await portrait.waitFor(); const poster = await ratio(portrait); check(poster > .62 && poster < .71, "portrait film detail cover geometry (2:3)");
+  await boundedSurface(page, ".page-content", "desktop search results"); await captureComposition(page, "search-1280");
+  await page.goto(fixture.origin + `/watchlist/${film}`); const portrait = page.locator(".detail-metadata > .title-cover"); await portrait.waitFor(); const poster = await ratio(portrait); check(poster > .62 && poster < .71, "portrait film detail cover geometry (2:3)"); await captureComposition(page, "detail-1280");
   await page.goto(fixture.origin + `/watchlist/${video}`); const preview = page.locator(".detail-metadata > .video-cover"); await preview.waitFor(); const wide = await ratio(preview); check(wide > 1.7 && wide < 1.84, "16:9 YouTube detail preview geometry");
-  await page.goto(fixture.origin + "/pick"); await page.getByRole("heading", { name: "Pick for me", exact: true }).waitFor(); await page.locator(".picker-viewers input[type=checkbox]").first().check(); await field(page, "Available time (whole minutes)").fill("25"); await field(page, "Mood").selectOption("funny"); await press(page, "Pick for me"); await page.getByText("Your suggestion is ready.", { exact: true }).waitFor();
+  await page.goto(fixture.origin + "/pick"); await page.getByRole("heading", { name: "Pick for me", exact: true }).waitFor(); await boundedSurface(page, ".picker-page", "desktop picker form"); await captureComposition(page, "picker-input-1280"); await page.locator(".picker-viewers input[type=checkbox]").first().check(); await field(page, "Available time (whole minutes)").fill("25"); await field(page, "Mood").selectOption("funny"); await press(page, "Pick for me"); await page.getByText("Your suggestion is ready.", { exact: true }).waitFor(); await page.locator(".picker-page > .group-result").waitFor(); await captureComposition(page, "picker-result-1280");
 }
 
-async function mobile(page, video) {
+async function mobile(page, film, video) {
   await page.setViewportSize({ width: 375, height: 900 }); await page.goto(fixture.origin + "/watchlist");
   const add = page.getByRole("link", { name: "Add title", exact: true }); await add.scrollIntoViewIfNeeded(); const action = await box(add); check(action.y + action.height <= 900, "a visible mobile primary Add action");
   const bottom = page.getByRole("navigation", { name: "Main navigation mobile" }); await bottom.waitFor(); for (const name of ["Watchlist", "Add", "Pick for me"]) check(await bottom.getByRole("link", { name, exact: true }).isVisible(), `the mobile ${name} action`);
@@ -123,10 +134,16 @@ async function mobile(page, video) {
   check(grid.columnCount === 2 && grid.firstCardWidth >= 150 && grid.firstCardWidth <= 180, `a readable two-column mobile grid; observed ${grid.columnCount} columns and ${Math.round(grid.firstCardWidth)}px cards`);
   check(grid.firstCoverHeight > grid.firstCoverWidth * 1.35 && grid.firstCoverHeight < grid.firstCoverWidth * 1.6, `portrait 2:3 covers on mobile cards; observed ${Math.round(grid.firstCoverWidth)}×${Math.round(grid.firstCoverHeight)}`);
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "no mobile horizontal clipping");
-  await page.goto(fixture.origin + `/watchlist/${video}`); const preview = page.locator(".detail-metadata > .video-cover"); await preview.waitFor(); const wide = await ratio(preview); check(wide > 1.7 && wide < 1.84, "16:9 YouTube preview geometry at 375px");
+  const more = page.locator("summary[aria-label='More workspace options']:visible"); await more.waitFor(); await more.click(); const utilities = page.getByRole("navigation", { name: "Workspace utilities", exact: true }); await utilities.waitFor(); for (const name of ["Group", "Archive", "Account"]) check(await utilities.getByRole("link", { name, exact: true }).isVisible(), `a reachable compact mobile ${name} utility`);
   // Pre-fix current main intentionally fails here: it retains a separate old
   // Group/Archive/Account strip above the source-style primary bottom nav.
   check(await page.getByRole("navigation", { name: "Other destinations" }).isVisible() === false, "the reference-style mobile shell has no extra legacy utility strip above its Watchlist/Add/Pick for me bottom navigation");
+  await page.goto(fixture.origin + "/"); await page.locator(".auth-card").waitFor(); await captureComposition(page, "sign-in-375");
+  await page.goto(fixture.origin + "/watchlist/add"); await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "mobile add form", 375); await captureComposition(page, "add-375");
+  await showSearchControls(page); await boundedSurface(page, ".page-content", "mobile search results", 375); await captureComposition(page, "search-375");
+  await page.goto(fixture.origin + `/watchlist/${film}`); const portrait = page.locator(".detail-metadata > .title-cover"); await portrait.waitFor(); check(await ratio(portrait) > .62, "stacked portrait film detail at 375px"); await captureComposition(page, "detail-375");
+  await page.goto(fixture.origin + `/watchlist/${video}`); const preview = page.locator(".detail-metadata > .video-cover"); await preview.waitFor(); const wide = await ratio(preview); check(wide > 1.7 && wide < 1.84, "16:9 YouTube preview geometry at 375px");
+  await page.goto(fixture.origin + "/pick"); await page.getByRole("heading", { name: "Pick for me", exact: true }).waitFor(); await boundedSurface(page, ".picker-page", "mobile picker form", 375); await captureComposition(page, "picker-input-375"); await page.locator(".picker-viewers input[type=checkbox]").first().check(); await field(page, "Available time (whole minutes)").fill("25"); await field(page, "Mood").selectOption("funny"); await press(page, "Pick for me"); await page.getByText("Your suggestion is ready.", { exact: true }).waitFor(); await page.locator(".picker-page > .group-result").waitFor(); await captureComposition(page, "picker-result-375");
 }
 
 try {
@@ -143,7 +160,7 @@ try {
     check(Boolean(film) && Boolean(video) && film !== video && extraTitles.every(Boolean), "six distinct persisted authorised titles"); globalThis.ids = { film, video };
   });
   await step("1280px source-derived account/list/detail/picker composition", () => desktop(page, globalThis.ids.film, globalThis.ids.video));
-  await step("375px source-derived compact shell and real preview geometry", () => mobile(page, globalThis.ids.video));
+  await step("375px source-derived compact shell and real preview geometry", () => mobile(page, globalThis.ids.film, globalThis.ids.video));
   await context.close(); await fixture.audit();
 } catch (error) { failure = error; }
 finally { try { await fixture?.cleanup(); } catch (error) { failure ??= error; } }

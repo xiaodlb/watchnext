@@ -284,6 +284,7 @@ body:has(.auth-page) { padding-bottom: 0; }
 
 .mobile-navigation { display: none; }
 .mobile-utility-navigation { display: none; }
+.mobile-utility-menu { display: none; }
 @media (min-width: 48rem) {
   .watchlist-items { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
@@ -297,9 +298,14 @@ body:has(.auth-page) { padding-bottom: 0; }
   .header-content { min-height: 4rem; }
   .source-navigation { display: none; }
   .context-badge { display: none; }
-  .mobile-utility-navigation { display: flex; gap: .25rem; overflow-x: auto; padding: .4rem 1rem; border-bottom: 1px solid var(--color-border); background: var(--color-surface); }
-  .mobile-utility-navigation a { display: inline-flex; min-height: 2.25rem; align-items: center; padding-inline: .55rem; border-radius: .45rem; color: var(--color-muted); font-size: .78rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
-  .mobile-utility-navigation a[aria-current="page"] { background: var(--color-accent-soft); color: var(--color-accent); }
+  .mobile-utility-menu { position: relative; display: block; margin-left: auto; }
+  .mobile-utility-menu summary { display: inline-flex; min-height: 2.5rem; align-items: center; padding: .45rem .6rem; border: 1px solid var(--color-border); border-radius: .55rem; color: var(--color-muted); background: var(--color-surface); cursor: pointer; font-size: .78rem; font-weight: 750; list-style: none; }
+  .mobile-utility-menu summary::-webkit-details-marker { display: none; }
+  .mobile-utility-menu summary::after { content: "▾"; margin-left: .3rem; font-size: .65rem; }
+  .mobile-utility-menu[open] summary { border-color: #b9c9ff; background: var(--color-accent-soft); color: var(--color-accent); }
+  .mobile-utility-menu-panel { position: absolute; top: calc(100% + .45rem); right: 0; z-index: 40; display: grid; min-width: 9rem; padding: .35rem; border: 1px solid var(--color-border); border-radius: .75rem; background: var(--color-surface); box-shadow: 0 12px 28px #17233b1c; }
+  .mobile-utility-menu-panel a { padding: .6rem .7rem; border-radius: .45rem; color: var(--color-muted); font-size: .86rem; font-weight: 700; text-decoration: none; }
+  .mobile-utility-menu-panel a:hover, .mobile-utility-menu-panel a[aria-current="page"] { background: var(--color-accent-soft); color: var(--color-accent); }
   .main-content { padding-top: 1.5rem; }
   .site-footer { display: none; }
   .mobile-navigation { position: fixed; z-index: 30; right: 0; bottom: 0; left: 0; display: grid; grid-template-columns: repeat(3, 1fr); padding-bottom: env(safe-area-inset-bottom); border-top: 1px solid var(--color-border); background: color-mix(in srgb, var(--color-surface) 96%, transparent); backdrop-filter: blur(12px); box-shadow: 0 -5px 18px #17233b0c; }

@@ -79,8 +79,15 @@ export function MobileNavigation() {
 }
 
 export function MobileUtilityNavigation() {
-  // The reference shell intentionally has one compact, three-action mobile
-  // navigation. Account, group and archive remain available from the desktop
-  // "More" menu, without inserting a legacy strip above the app on phones.
-  return null;
+  const pathname = usePathname();
+  if (pathname === "/mock" || pathname.startsWith("/mock/")) return null;
+  // Keep the reference's one compact primary bottom bar. The secondary
+  // destinations live in a header disclosure instead of returning the old
+  // permanent mobile strip, so every real workspace action remains reachable.
+  return <details className="mobile-utility-menu">
+    <summary aria-label="More workspace options">More</summary>
+    <nav className="mobile-utility-menu-panel" aria-label="Workspace utilities">
+      {secondaryDestinations.map(({ href, label }) => <Link key={href} href={href} aria-current={activeDestination(pathname, href) ? "page" : undefined}>{label}</Link>)}
+    </nav>
+  </details>;
 }
