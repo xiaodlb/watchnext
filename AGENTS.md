@@ -53,6 +53,7 @@ WatchNext is an academic web app that helps couples and friends choose something
 - `_docs/mock-frontend.md` - implemented isolated #42 foundation/entry/state lifetime; domain follow-ups remain pending.
 - `_docs/operation-inventory.md` - complete route/action/FR/NFR map and bounded #42 synthetic mock-service handoff.
 - `_docs/design-references.md` - actually observed Lovable screenshots/access limits and baseline source priority.
+- `_docs/together-tonight-reference.md` - pinned Together Tonight source provenance and the visual-only adaptation boundary.
 
 - `_docs/account-discovery-enhancement.md` - authorized account/multi-group/autofill/preview requirements, explicit answers versus engineering defaults and preservation constraints.
 - `_docs/enhancement-audit.md` - current twelve-answer/source/verification map; independent issue QA remains authoritative.

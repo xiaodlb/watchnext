@@ -70,6 +70,16 @@ it("filters the already-authorized library by type without changing the server-b
  fireEvent.click(screen.getByRole("button",{name:"All"}));
  expect(screen.getByText("Shared film")).toBeTruthy();
 });
+it("keeps an authorized YouTube entry in the reference-style card grid with its wide preview",()=>{
+ const youtube: WatchlistItem={...fixture,id:"video",title:"Shared video",contentType:"youtube",coverUrl:"https://i.ytimg.com/vi/YtFixture01/default.jpg"};
+ render(<WatchlistContent view={{activeMemberId:"anna",items:[youtube]}}/>);
+ const card=screen.getByRole("article",{name:"Shared video"});
+ expect(card.className).toContain("watchlist-card");
+ const cover=within(card).getByRole("img",{name:"Shared video cover"}).parentElement;
+ expect(cover?.className).toContain("title-cover");
+ expect(cover?.className).toContain("video-cover");
+ expect(within(card).getByText("YouTube video")).toBeTruthy();
+});
 it("storage retry keeps a requested Mine mode without replacing the current URL",()=>{
  render(<WatchlistLoadError filter="mine"/>);expect(screen.getByText("Your Added by me request is kept when you retry.")).toBeTruthy();fireEvent.click(screen.getByRole("button",{name:"Try again"}));expect(refresh).toHaveBeenCalledTimes(1);
 });
