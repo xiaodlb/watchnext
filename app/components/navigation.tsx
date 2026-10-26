@@ -29,23 +29,28 @@ export function Navigation() {
     </ul></nav>
   );
   return (
-    <nav aria-label="Main navigation">
-      <ul className="navigation navigation-primary">
-        {destinations.map(({ href, label }) => {
-          const active = activeDestination(pathname, href);
-          return (
-            <li key={href}>
-              <Link className="navigation-link" href={href} aria-current={active ? "page" : undefined}>
-                {label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-      <ul className="navigation navigation-secondary" aria-label="Other destinations">
-        {secondaryDestinations.map(({ href, label }) => <li key={href}><Link className="navigation-link" href={href} aria-current={activeDestination(pathname, href) ? "page" : undefined}>{label}</Link></li>)}
-      </ul>
-    </nav>
+    <div className="source-navigation">
+      <nav aria-label="Main navigation">
+        <ul className="navigation navigation-primary">
+          {destinations.map(({ href, label }) => {
+            const active = activeDestination(pathname, href);
+            return (
+              <li key={href}>
+                <Link className="navigation-link" href={href} aria-current={active ? "page" : undefined}>
+                  {label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+      <details className="utility-menu">
+        <summary aria-label="More workspace options">More</summary>
+        <div className="utility-menu-panel">
+          {secondaryDestinations.map(({ href, label }) => <Link key={href} href={href} aria-current={activeDestination(pathname, href) ? "page" : undefined}>{label}</Link>)}
+        </div>
+      </details>
+    </div>
   );
 }
 
@@ -74,9 +79,8 @@ export function MobileNavigation() {
 }
 
 export function MobileUtilityNavigation() {
-  const pathname = usePathname();
-  if (pathname === "/mock" || pathname.startsWith("/mock/")) return null;
-  return <nav className="mobile-utility-navigation" aria-label="Other destinations">
-    {secondaryDestinations.map(({ href, label }) => <Link key={href} href={href} aria-current={activeDestination(pathname, href) ? "page" : undefined}>{label}</Link>)}
-  </nav>;
+  // The reference shell intentionally has one compact, three-action mobile
+  // navigation. Account, group and archive remain available from the desktop
+  // "More" menu, without inserting a legacy strip above the app on phones.
+  return null;
 }
