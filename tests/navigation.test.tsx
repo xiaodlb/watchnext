@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MobileUtilityNavigation, Navigation } from "../app/components/navigation";
+import { Navigation } from "../app/components/navigation";
 import { Picker } from "../app/pick/picker";
 
 
@@ -24,12 +24,15 @@ describe("shared navigation", () => {
   }
 });
 
-it("keeps Group, Archive and Account discoverable beside the compact mobile primary navigation", () => {
+it("keeps Group, Archive and Account discoverable in the compact More menu", () => {
   route.pathname = "/watchlist";
-  render(<MobileUtilityNavigation />);
-  const utility = screen.getByRole("navigation", { name: "Other destinations" });
-  expect(utility.querySelectorAll("a")).toHaveLength(3);
-  expect(Array.from(utility.querySelectorAll("a")).map(link => link.getAttribute("href"))).toEqual(["/group", "/archive", "/account"]);
+  render(<Navigation />);
+  const more = screen.getByLabelText("More workspace options");
+  expect(more.textContent).toBe("More");
+  const menu = more.closest("details");
+  expect(menu).toBeTruthy();
+  expect(Array.from(menu!.querySelectorAll("a")).map(link => link.getAttribute("href")))
+    .toEqual(["/group", "/archive", "/account"]);
 });
 
 it("real Pick destination keeps one heading and an honest empty-group action", () => {
