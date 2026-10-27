@@ -1,16 +1,40 @@
 import { randomBytes } from "node:crypto";
-import { existsSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { createFixture, safeDiagnostic } from "../e2e/lifecycle.mjs";
 
 // A real isolated production regression, not a mock-service or component test.
 let fixture, failure, current = "setup";
+const evidenceDirectory = resolve(process.cwd(), "_docs/evidence/together-tonight-73");
+const retainEvidence = process.env.WATCHNEXT_CAPTURE_73_EVIDENCE === "1";
+const expectedEvidence = [
+  "sign-in-1280", "watchlist-1280", "add-1280", "search-1280", "detail-1280", "picker-input-1280", "picker-result-1280",
+  "sign-in-375", "watchlist-375", "add-375", "search-375", "detail-375", "picker-input-375", "picker-result-375",
+];
+const recordedEvidence = [];
 const check = (value, expected) => { if (!value) throw new Error(`Expected ${expected}; observed false`); };
 const step = async (name, run) => { current = name; await run(); console.log(`PASS ${name}`); };
 const field = (page, name) => page.getByLabel(name, { exact: true });
 const press = (page, name) => page.getByRole("button", { name, exact: true }).press("Enter");
 const box = async locator => { const value = await locator.boundingBox(); if (!value) throw new Error("Expected visible source-reference surface; observed no box"); return value; };
 const ratio = async locator => { const value = await box(locator); return value.width / value.height; };
+
+function pngGeometry(path) {
+  const bytes = readFileSync(path);
+  const signature = "89504e470d0a1a0a";
+  check(bytes.length >= 24 && bytes.subarray(0, 8).toString("hex") === signature, `${path} is a PNG`);
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+}
+
+function verifyCommittedEvidence() {
+  for (const name of expectedEvidence) {
+    const path = join(evidenceDirectory, `${name}.png`);
+    check(existsSync(path), `committed visual evidence ${name} exists`);
+    const image = pngGeometry(path);
+    const expectedWidth = name.endsWith("-1280") ? 1280 : 375;
+    check(image.width === expectedWidth && image.height >= 600, `committed ${name} has the expected ${expectedWidth}px viewport geometry; observed ${image.width}×${image.height}`);
+  }
+}
 
 async function createAccountGroup(page, username, password, group) {
   current = "register real account";
@@ -62,9 +86,14 @@ async function showSearchControls(page) {
 }
 
 async function captureComposition(page, name) {
-  const path = join(fixture.root, `${name}.png`);
-  await page.screenshot({ path, fullPage: true });
-  check(existsSync(path) && statSync(path).size > 10_000, `a real ${name} screenshot capture`);
+  const path = retainEvidence ? join(evidenceDirectory, `${name}.png`) : join(fixture.root, `${name}.png`);
+  if (retainEvidence) mkdirSync(evidenceDirectory, { recursive: true });
+  await page.screenshot({ path, fullPage: true, animations: "disabled", caret: "hide" });
+  check(existsSync(path), `a real ${name} screenshot capture`);
+  const image = pngGeometry(path);
+  const viewport = page.viewportSize();
+  check(image.width === viewport?.width && image.height >= (viewport?.height ?? 0), `${name} capture preserves its viewport geometry; observed ${image.width}×${image.height}`);
+  if (retainEvidence) recordedEvidence.push(name);
 }
 
 async function boundedSurface(page, selector, label, maximum = 800) {
@@ -161,8 +190,14 @@ try {
   });
   await step("1280px source-derived account/list/detail/picker composition", () => desktop(page, globalThis.ids.film, globalThis.ids.video));
   await step("375px source-derived compact shell and real preview geometry", () => mobile(page, globalThis.ids.film, globalThis.ids.video));
+  if (retainEvidence) {
+    check(recordedEvidence.length === expectedEvidence.length && expectedEvidence.every(name => recordedEvidence.includes(name)), "every required durable source-comparison screen was captured");
+    verifyCommittedEvidence();
+  } else {
+    verifyCommittedEvidence();
+  }
   await context.close(); await fixture.audit();
 } catch (error) { failure = error; }
 finally { try { await fixture?.cleanup(); } catch (error) { failure ??= error; } }
-if (failure) { console.error(`FAIL ${current}: ${safeDiagnostic(failure, fixture?.secrets ?? [], fixture?.root ?? "<none>", fixture ? [fixture.sentinelRoot] : [])}`); console.error(`Owned cleanup complete: ${fixture?.cleanupComplete ?? false}; no screenshots, traces, HAR or video retained.`); process.exitCode = 1; }
-else console.log(JSON.stringify({ pass: true, widths: [1280, 375], realAuthorisedData: true, sourceReferenceShell: true, ownedCleanup: fixture.cleanupComplete }));
+if (failure) { console.error(`FAIL ${current}: ${safeDiagnostic(failure, fixture?.secrets ?? [], fixture?.root ?? "<none>", fixture ? [fixture.sentinelRoot] : [])}`); console.error(`Owned cleanup complete: ${fixture?.cleanupComplete ?? false}; ${retainEvidence ? "only the explicitly requested synthetic evidence captures were retained." : "no screenshots, traces, HAR or video retained."}`); process.exitCode = 1; }
+else console.log(JSON.stringify({ pass: true, widths: [1280, 375], realAuthorisedData: true, sourceReferenceShell: true, committedEvidence: retainEvidence, evidenceDirectory: retainEvidence ? "_docs/evidence/together-tonight-73" : undefined, ownedCleanup: fixture.cleanupComplete }));

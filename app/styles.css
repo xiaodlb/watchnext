@@ -227,7 +227,7 @@ body:has(.auth-page) { padding-bottom: 0; }
 .watchlist-items { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 /* The source list is made from cover-led tiles.  Keep its presentation
    separate from the real card data so links/authorship/progress stay intact. */
-.watchlist-card { height: 100%; overflow: hidden; padding: .5rem; border-radius: .9rem; box-shadow: 0 1px 2px #17233b0a; transition: transform .15s ease, box-shadow .15s ease; }
+.watchlist-card { display: block; height: 100%; overflow: hidden; padding: .5rem; border-radius: .9rem; box-shadow: 0 1px 2px #17233b0a; transition: transform .15s ease, box-shadow .15s ease; }
 .watchlist-card:hover { transform: translateY(-1px); box-shadow: 0 7px 18px #17233b12; }
 .watchlist-card-link { display: flex; height: 100%; flex-direction: column; color: var(--color-text); text-decoration: none; }
 .watchlist-card .title-cover { width: 100%; min-height: 0; aspect-ratio: 2 / 3; }
