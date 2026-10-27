@@ -26,12 +26,12 @@ export async function HeaderAccount() {
   try {
     const context = await getActiveGroup();
     const member = context.activeMemberId
-      ? getDatabase().prepare("SELECT name, color FROM members WHERE id=? AND group_id=?")
-        .get(context.activeMemberId, context.groupId) as { name?: string; color?: string } | undefined
+      ? getDatabase().prepare("SELECT name, avatar_color FROM members WHERE id=? AND group_id=?")
+        .get(context.activeMemberId, context.groupId) as { name?: string; avatar_color?: string } | undefined
       : undefined;
     if (!member?.name) return null;
     return <Link className="header-account" href={context.mode === "account" ? "/account" : "/group"} aria-label={context.mode === "account" ? "Account and sign out" : "Group profile"} title={member.name}>
-      <span className="avatar" style={{ backgroundColor: member.color }} aria-hidden="true">{initials(member.name)}</span>
+      <span className="avatar" style={{ backgroundColor: member.avatar_color }} aria-hidden="true">{initials(member.name)}</span>
     </Link>;
   } catch { return null; }
 }

@@ -162,6 +162,13 @@ async function desktop(page, film, video) {
   await captureComposition(page, "sign-in-1280");
   if (sourcePortCapture) { await page.goto(fixture.origin + "/register"); await page.locator(".auth-card").waitFor(); await captureComposition(page, "register-1280"); }
   await page.goto(fixture.origin + "/watchlist"); await page.getByRole("heading", { name: "Visual regression group", exact: true }).waitFor();
+  const account = page.getByRole("link", { name: "Account and sign out", exact: true });
+  await account.waitFor();
+  const activeMember = fixture.db.prepare("SELECT m.name,m.avatar_color FROM members m JOIN account_memberships a ON a.member_id=m.id AND a.group_id=m.group_id JOIN groups g ON g.id=m.group_id WHERE g.name=? AND a.status='active'").get("Visual regression group");
+  check(Boolean(activeMember), "the active account member exists in the isolated SQLite schema");
+  check(await account.getAttribute("href") === "/account" && await account.getAttribute("title") === activeMember.name, "the header avatar links to the real active account");
+  const expectedColor = await page.evaluate(color => { const probe = document.createElement("span"); probe.style.backgroundColor = color; return probe.style.backgroundColor; }, activeMember.avatar_color);
+  check(await account.locator(".avatar").textContent() === "V" && await account.locator(".avatar").evaluate(node => node.style.backgroundColor) === expectedColor, "the header renders the persisted member initial and avatar_color");
   await page.getByRole("link", { name: "Add title", exact: true }).waitFor(); await page.getByRole("navigation", { name: "Watchlist filter" }).waitFor();
   await page.getByLabel("Content type filter").getByRole("button", { name: "Movies" }).waitFor();
   check(await page.locator(".watchlist-items").evaluate(node => getComputedStyle(node).display === "grid"), "a real shared watchlist card grid");
