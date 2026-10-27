@@ -27,9 +27,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             </Link>
             <ContextBadge />
             <Navigation />
+            <MobileUtilityNavigation />
           </div>
         </header>
-        <MobileUtilityNavigation />
         <main id="main-content" className="shell main-content" tabIndex={-1}>
           {children}
         </main>
