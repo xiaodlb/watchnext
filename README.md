@@ -1,5 +1,31 @@
 # WatchNext
 
+## Default frontend: Together Tonight
+
+The default `pnpm dev` command runs the frontend copied from
+[`xiaodlb/together-tonight-watchlist`](https://github.com/xiaodlb/together-tonight-watchlist)
+in `lovable-frontend/`. Its original interface uses prototype accounts and
+in-memory sample data; changes disappear when the server/browser session is
+reset. It is not connected to the existing WatchNext accounts or SQLite data.
+
+On a fresh clone, install Node.js 24 and pnpm 11.25.0, then run:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+Open the local address printed in the terminal. Vite normally uses
+`http://127.0.0.1:3000`; if that port is occupied, it selects the next free
+port. The `pnpm dev` command installs the copied frontend's pinned dependencies
+before starting it.
+
+The original Next.js application and its data remain available with
+`pnpm dev:next`. The `build` and `start` commands below still refer to that
+Next.js application, not to the default prototype frontend.
+
+## Existing Next.js application
+
 An academic web app for choosing something to watch from your group's saved list. Save movies, series, anime and YouTube videos; keep separate progress/ratings/notes; pick by viewers, full duration and mood. Duplicate saves add names to one entry. Register a private username/password account, save your one-time recovery code, and create/join multiple groups. Creator controls, contributor edits, All/Mine, covers, automatic editable metadata review, archive/restore and ordered Pick again are implemented. Existing trusted-name groups remain a separate legacy mode.
 
 ## Requirements
@@ -16,7 +42,7 @@ pnpm install --frozen-lockfile
 $env:WATCHNEXT_DATABASE_PATH = Join-Path $env:LOCALAPPDATA 'WatchNext\watchnext.sqlite'
 $env:WATCHNEXT_APP_ORIGIN = 'http://127.0.0.1:3000'
 pnpm db:init
-pnpm dev
+pnpm dev:next
 ```
 
 Open **http://127.0.0.1:3000** and keep the terminal running. Stop with Ctrl+C. These PowerShell commands select a local private database explicitly; [the setup guide](_docs/local-setup.md) covers quoted paths with spaces, macOS/Linux, alternate ports, account groups and separate legacy invitations/profiles, optional provider settings and troubleshooting. Match browser/configured origin exactly; do not silently mix localhost and 127.0.0.1.
@@ -53,7 +79,7 @@ Before a feature uses persistent storage, run `pnpm db:init`. It initializes/mig
 
 Invitation links use server-only `WATCHNEXT_APP_ORIGIN`, default `http://127.0.0.1:3000`; set it to the exact origin/port used for your demonstration. It must have no credentials, path, query, or fragment. Loopback links work only on the same computer. See [the server operation guide](_docs/api.md) and optional [.env.example](.env.example). Keep actual invitation links and environment files private.
 
-Use `pnpm dev` / `pnpm start` to serve the app. Their privacy preload suppresses credential-bearing framework request traces before Next initializes; direct unprotected Next startup is rejected. The pinned-runtime hook and upgrade checks are documented in the server operation guide.
+Use `pnpm dev:next` / `pnpm start` to serve the existing Next.js app. Their privacy preload suppresses credential-bearing framework request traces before Next initializes; direct unprotected Next startup is rejected. The pinned-runtime hook and upgrade checks are documented in the server operation guide.
 
 Run `pnpm db:migrate:temp` to create a temporary database and inspect its tables, or `pnpm db:verify` for synthetic acceptance fixtures with automatic cleanup. Both commands protect normal user databases by accepting no path arguments. See [the database guide](_docs/database.md) for schema details, decision links, exact commands, and recovery behavior.
 
