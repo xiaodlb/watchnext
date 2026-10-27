@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { TitleForm } from "../app/watchlist/add/title-form";
 import { lookupMetadata } from "../lib/metadata/lookup";
@@ -44,6 +44,25 @@ it("YouTube title intent and both providers use explicit candidate and opaque pa
 });
 it("explicit candidate selection fills clean form without assigning moods",async()=>{
  const find=vi.fn(async()=>({kind:"candidates",handle:"search",requiresSelection:true,omittedInvalidCandidates:false,candidates:[{identity:{namespace:"kinopoisk_unofficial",externalId:"1001"},title:"Same",year:2001,contentType:"movie",coverUrl:null}]} as ReviewResult));const select=vi.fn(async(_form:FormData)=>proposal("Chosen"));render(<TitleForm action={save} lookup={find} select={select}/>);source("kinopoisk_unofficial");click("Search titles");await screen.findByRole("button",{name:"Review Same (2001)"});expect(select).not.toHaveBeenCalled();click("Review Same (2001)");await waitFor(()=>expect(input("Title").value).toBe("Chosen"));expect(select.mock.calls[0][0].get("candidateId")).toBe("1001");expect(input("Funny").checked).toBe(false);
+});
+
+it("switching result sources repeats the same query against the chosen provider and ignores late results",async()=>{
+ const requests:{form:FormData;resolve:(value:ReviewResult)=>void}[]=[];
+ const find=vi.fn((form:FormData)=>new Promise<ReviewResult>(resolve=>requests.push({form,resolve})));
+ const results=(namespace:"youtube"|"kinopoisk_unofficial",title:string):ReviewResult=>({kind:"candidates",handle:"search",requiresSelection:true,omittedInvalidCandidates:false,candidates:[{identity:{namespace,externalId:namespace==="youtube"?"YtFixture01":"1001"},title,year:2001,contentType:namespace==="youtube"?"youtube":"movie",coverUrl:null}]});
+ render(<TitleForm action={save} lookup={find} select={vi.fn()}/>);source("kinopoisk_unofficial");edit("Title to search","Shared query");click("Search titles");
+ await act(async()=>requests[0].resolve(results("kinopoisk_unofficial","Film result")));
+ const region=screen.getByRole("region",{name:"Search results"});
+ fireEvent.click(within(region).getByRole("button",{name:"YouTube"}));
+ expect(requests[1].form.get("source")).toBe("youtube");expect(requests[1].form.get("query")).toBe("Shared query");expect(requests[1].form.get("queryKind")).toBe("title");
+ fireEvent.click(within(region).getByRole("button",{name:"Movies & shows"}));
+ expect(requests[2].form.get("source")).toBe("kinopoisk_unofficial");expect(requests[2].form.get("query")).toBe("Shared query");
+ await act(async()=>requests[2].resolve(results("kinopoisk_unofficial","New film")));
+ await act(async()=>requests[1].resolve(results("youtube","Stale video")));
+ expect(within(region).getByRole("button",{name:"Review New film (2001)"})).toBeTruthy();expect(screen.queryByText("Stale video")).toBeNull();
+ fireEvent.click(within(region).getByRole("button",{name:"YouTube"}));
+ await act(async()=>requests[3].resolve({kind:"no_match",candidates:[],manualFallback:true} as ReviewResult));
+ expect(screen.getByText(/No matching titles/)).toBeTruthy();expect(within(region).getByRole("button",{name:"Movies & shows"})).toBeTruthy();
 });
 
 it("saving while lookup is pending prevents its late success from attaching identity or replacing submitted details",async()=>{

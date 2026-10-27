@@ -13,6 +13,7 @@ const expectedEvidence = [
   "sign-in-1280", "watchlist-1280", "add-1280", "search-1280", "detail-1280", "picker-input-1280", "picker-result-1280",
   "sign-in-375", "watchlist-375", "add-375", "search-375", "detail-375", "picker-input-375", "picker-result-375",
 ];
+const registrationEvidence = ["register-1280", "register-375"];
 const recordedEvidence = [];
 const check = (value, expected) => { if (!value) throw new Error(`Expected ${expected}; observed false`); };
 const step = async (name, run) => { current = name; await run(); console.log(`PASS ${name}`); };
@@ -28,9 +29,9 @@ function pngGeometry(path) {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
-function verifyCommittedEvidence() {
-  for (const name of expectedEvidence) {
-    const path = join(evidenceDirectory, `${name}.png`);
+function verifyCommittedEvidence(directory = evidenceDirectory, names = expectedEvidence) {
+  for (const name of names) {
+    const path = join(directory, `${name}.png`);
     check(existsSync(path), `committed visual evidence ${name} exists`);
     const image = pngGeometry(path);
     const expectedWidth = name.endsWith("-1280") ? 1280 : 375;
@@ -83,7 +84,13 @@ async function showSearchControls(page) {
   await field(page, "Entry method").selectOption("kinopoisk_unofficial");
   await field(page, "Title to search").fill("source composition");
   await press(page, "Search titles");
-  await page.getByRole("region", { name: "Search results", exact: true }).waitFor();
+  const results = page.getByRole("region", { name: "Search results", exact: true });
+  await results.waitFor();
+  await results.getByRole("button", { name: "Review Synthetic ambiguous film (2001)", exact: true }).waitFor();
+  await results.getByRole("button", { name: "YouTube", exact: true }).click();
+  await results.getByRole("button", { name: "Review Synthetic YouTube proposal", exact: true }).waitFor();
+  await results.getByRole("button", { name: "Movies & shows", exact: true }).click();
+  await results.getByRole("button", { name: "Review Synthetic ambiguous film (2001)", exact: true }).waitFor();
   check(await page.locator(".form-fields").count() >= 1, "the real source-style search and manual-entry surface");
 }
 
@@ -153,6 +160,7 @@ async function desktop(page, film, video) {
   const auth = await box(card), viewport = page.viewportSize(); check(Math.abs(auth.x + auth.width / 2 - viewport.width / 2) < 4, "a centred Together Tonight-style account card at 1280px");
   check(await page.locator(".site-header").isVisible() === false, "no application header on account entry");
   await captureComposition(page, "sign-in-1280");
+  if (sourcePortCapture) { await page.goto(fixture.origin + "/register"); await page.locator(".auth-card").waitFor(); await captureComposition(page, "register-1280"); }
   await page.goto(fixture.origin + "/watchlist"); await page.getByRole("heading", { name: "Visual regression group", exact: true }).waitFor();
   await page.getByRole("link", { name: "Add title", exact: true }).waitFor(); await page.getByRole("navigation", { name: "Watchlist filter" }).waitFor();
   await page.getByLabel("Content type filter").getByRole("button", { name: "Movies" }).waitFor();
@@ -191,6 +199,7 @@ async function mobile(page, film, video) {
   // Group/Archive/Account strip above the source-style primary bottom nav.
   check(await page.getByRole("navigation", { name: "Other destinations" }).isVisible() === false, "the reference-style mobile shell has no extra legacy utility strip above its Watchlist/Add/Pick for me bottom navigation");
   await page.goto(fixture.origin + "/"); await page.locator(".auth-card").waitFor(); await captureComposition(page, "sign-in-375");
+  if (sourcePortCapture) { await page.goto(fixture.origin + "/register"); await page.locator(".auth-card").waitFor(); await captureComposition(page, "register-375"); }
   await page.goto(fixture.origin + "/watchlist/add"); await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "mobile add form", 375); await sourceAddComposition(page, 375); await captureComposition(page, "add-375");
   await showSearchControls(page); await boundedSurface(page, ".page-content", "mobile search results", 375); await captureComposition(page, "search-375");
   await page.goto(fixture.origin + `/watchlist/${film}`); const portrait = page.locator(".detail-metadata > .title-cover"); await portrait.waitFor(); check(await ratio(portrait) > .62, "stacked portrait film detail at 375px"); await captureComposition(page, "detail-375");
@@ -214,10 +223,12 @@ try {
   await step("1280px source-derived account/list/detail/picker composition", () => desktop(page, globalThis.ids.film, globalThis.ids.video));
   await step("375px source-derived compact shell and real preview geometry", () => mobile(page, globalThis.ids.film, globalThis.ids.video));
   if (retainEvidence) {
-    check(recordedEvidence.length === expectedEvidence.length && expectedEvidence.every(name => recordedEvidence.includes(name)), "every required durable source-comparison screen was captured");
-    verifyCommittedEvidence();
+    const capturedNames = sourcePortCapture ? [...expectedEvidence, ...registrationEvidence] : expectedEvidence;
+    check(recordedEvidence.length === capturedNames.length && capturedNames.every(name => recordedEvidence.includes(name)), "every required durable source-comparison screen was captured");
+    verifyCommittedEvidence(evidenceDirectory, capturedNames);
   } else {
     verifyCommittedEvidence();
+    verifyCommittedEvidence(resolve(process.cwd(), "_docs/evidence/source-page-port-75"), registrationEvidence);
   }
   await context.close(); await fixture.audit();
 } catch (error) { failure = error; }
