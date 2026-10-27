@@ -102,6 +102,27 @@ async function boundedSurface(page, selector, label, maximum = 800) {
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${label} has no horizontal clipping`);
 }
 
+// #75: the ready Together Tonight Add page has two independent cards/forms.
+// Earlier adaptations kept one old details form with lookup controls inside it.
+async function sourceAddComposition(page, width) {
+  const pageBody = page.locator(".page-content");
+  const forms = pageBody.locator("form");
+  const count = await forms.count();
+  check(count >= 2, `the ${width}px Add screen has separate search and manual-entry forms; observed ${count}`);
+  const search = forms.first(), manual = forms.last();
+  check(await search.getByRole("textbox", { name: /search title|paste youtube/i }).count() === 1,
+    `the ${width}px search card contains a search/link field`);
+  check(await search.getByRole("button", { name: /search/i }).count() === 1,
+    `the ${width}px search card has its own Search action`);
+  const types = manual.locator("button[aria-pressed]");
+  check(await types.count() === 4, `the ${width}px manual card has four selectable content-type tiles`);
+  for (const label of ["Movie", "Series", "Anime", "YouTube video"]) {
+    check(await types.filter({ hasText: label }).count() === 1, `the ${width}px ${label} tile is visible`);
+  }
+  check(await pageBody.evaluate(node => document.documentElement.scrollWidth <= innerWidth),
+    `the ${width}px Add composition does not clip horizontally`);
+}
+
 async function gridMetrics(page, expectedColumns, width) {
   return page.locator(".watchlist-items").evaluate((node, { expectedColumns, width }) => {
     const cards = [...node.querySelectorAll(":scope > li")].map(item => item.getBoundingClientRect());
@@ -145,7 +166,7 @@ async function desktop(page, film, video) {
   check(await firstCard.locator(".contributor-list .avatar").count() > 0, "a visible contributor avatar below each source-style card");
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "no desktop horizontal clipping");
   await page.goto(fixture.origin + "/watchlist/add");
-  await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "desktop add form"); await captureComposition(page, "add-1280");
+  await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "desktop add form"); await sourceAddComposition(page, 1280); await captureComposition(page, "add-1280");
   await showSearchControls(page);
   await boundedSurface(page, ".page-content", "desktop search results"); await captureComposition(page, "search-1280");
   await page.goto(fixture.origin + `/watchlist/${film}`); const portrait = page.locator(".detail-metadata > .title-cover"); await portrait.waitFor(); const poster = await ratio(portrait); check(poster > .62 && poster < .71, "portrait film detail cover geometry (2:3)"); await captureComposition(page, "detail-1280");
@@ -168,7 +189,7 @@ async function mobile(page, film, video) {
   // Group/Archive/Account strip above the source-style primary bottom nav.
   check(await page.getByRole("navigation", { name: "Other destinations" }).isVisible() === false, "the reference-style mobile shell has no extra legacy utility strip above its Watchlist/Add/Pick for me bottom navigation");
   await page.goto(fixture.origin + "/"); await page.locator(".auth-card").waitFor(); await captureComposition(page, "sign-in-375");
-  await page.goto(fixture.origin + "/watchlist/add"); await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "mobile add form", 375); await captureComposition(page, "add-375");
+  await page.goto(fixture.origin + "/watchlist/add"); await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "mobile add form", 375); await sourceAddComposition(page, 375); await captureComposition(page, "add-375");
   await showSearchControls(page); await boundedSurface(page, ".page-content", "mobile search results", 375); await captureComposition(page, "search-375");
   await page.goto(fixture.origin + `/watchlist/${film}`); const portrait = page.locator(".detail-metadata > .title-cover"); await portrait.waitFor(); check(await ratio(portrait) > .62, "stacked portrait film detail at 375px"); await captureComposition(page, "detail-375");
   await page.goto(fixture.origin + `/watchlist/${video}`); const preview = page.locator(".detail-metadata > .video-cover"); await preview.waitFor(); const wide = await ratio(preview); check(wide > 1.7 && wide < 1.84, "16:9 YouTube preview geometry at 375px");
