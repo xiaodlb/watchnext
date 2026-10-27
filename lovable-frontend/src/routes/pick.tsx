@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Shuffle } from "lucide-react";
 import { AppShell, Avatar, Btn, Chip, Cover } from "@/components/ui-kit";
-import { fmtMin, MEMBERS, MOODS, pickFor, useStore, type Mood } from "@/lib/store";
+import { fmtMin, MOODS, useStore, type Mood } from "@/lib/store";
 
 export const Route = createFileRoute("/pick")({
   head: () => ({
@@ -25,14 +25,27 @@ export const Route = createFileRoute("/pick")({
 const TIMES = [20, 45, 90, 150];
 
 function Pick() {
-  const { titles } = useStore();
+  const { titles, members, pick, nextPick } = useStore();
   const [minutes, setMinutes] = useState(45);
   const [mood, setMood] = useState<Mood | null>(null);
-  const [viewers, setViewers] = useState<string[]>(["me", "timur"]);
-  const [idx, setIdx] = useState<number | null>(null);
-  const result = mood ? pickFor(titles, minutes, mood) : null;
-  const t = result && idx !== null ? result.list[idx] : null;
-  const reset = () => setIdx(null);
+  const [viewers, setViewers] = useState<string[]>([]);
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const t = result?.candidate ? titles.find(x => x.id === result.candidate.id) : null;
+  const reset = () => { setResult(null); setError(""); };
+  async function runPick() {
+    if (!mood) return; setBusy(true); setError("");
+    try { setResult(await pick(viewers, minutes, mood)); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not select a title."); }
+    finally { setBusy(false); }
+  }
+  async function runNext() {
+    if (!result?.cycle) return; setBusy(true); setError("");
+    try { setResult(await nextPick(result.cycle.cycleId, result.cycle.step)); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Could not select another title."); }
+    finally { setBusy(false); }
+  }
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -43,9 +56,9 @@ function Pick() {
         <fieldset>
           <legend className="mb-2 text-sm font-semibold">Who's watching?</legend>
           <div className="flex flex-wrap gap-2">
-            {MEMBERS.map((m) => (
+            {members.map((m) => (
               <Chip key={m.id} active={viewers.includes(m.id)} onClick={() => { reset(); setViewers(viewers.includes(m.id) ? viewers.filter((v) => v !== m.id) : [...viewers, m.id]); }}>
-                <span className="flex items-center gap-2"><Avatar id={m.id} /> {m.id === "me" ? "You" : m.name}</span>
+                <span className="flex items-center gap-2"><Avatar id={m.id} /> {m.you ? "You" : m.name}</span>
               </Chip>
             ))}
           </div>
@@ -67,33 +80,32 @@ function Pick() {
             {MOODS.map((m) => <Chip key={m} active={mood === m} onClick={() => { reset(); setMood(m); }}>{m}</Chip>)}
           </div>
         </fieldset>
-        <Btn className="w-full" disabled={!mood || !viewers.length || minutes < 1} onClick={() => setIdx(0)}>
+        <Btn className="w-full" disabled={busy || !mood || !viewers.length || minutes < 1} onClick={() => void runPick()}>
           <Shuffle className="h-4 w-4" aria-hidden /> Pick something
         </Btn>
       </div>
+      {error && <p role="alert" className="mt-4 rounded-lg bg-destructive/10 p-3 text-sm">{error}</p>}
 
       <div aria-live="polite">
-        {result && idx !== null && (
-          t ? (
+        {result && (
+          result.kind === "picked" && t ? (
             <section className="surface mt-6 grid gap-6 p-6 sm:grid-cols-[10rem_1fr]">
               <Cover t={t} className="mx-auto w-40" />
               <div>
                 <p className="text-sm font-semibold uppercase tracking-wide text-primary">Tonight's pick</p>
                 <h2 className="text-3xl font-extrabold">{t.title}</h2>
                 <p className="text-muted-foreground">{t.kind} · {fmtMin(t.minutes)}{t.kind === "Series" || t.kind === "Anime" ? " episode" : ""}{t.progress && ` · Next: ${t.progress}`}</p>
-                {result.tier === "over" && <p className="mt-2 rounded-lg bg-muted p-2 text-sm">Runs {t.minutes - minutes} min over your time.</p>}
-                {result.tier === "mood" && <p className="mt-2 rounded-lg bg-muted p-2 text-sm">Nothing {mood?.toLowerCase()} fits, so this is a different mood ({t.moods.join(", ")}).</p>}
+                {result.candidate?.message && <p className="mt-2 rounded-lg bg-muted p-2 text-sm">{result.candidate.message}</p>}
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link to="/title/$id" params={{ id: t.id }} className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 font-semibold text-primary-foreground">Let's watch</Link>
-                  <Btn variant="secondary" onClick={() => setIdx(idx + 1)}>Pick again</Btn>
+                  <Btn variant="secondary" disabled={busy || !result.cycle} onClick={() => void runNext()}>Pick again</Btn>
                 </div>
-                <p className="mt-2 text-sm text-muted-foreground">{idx + 1} of {result.list.length} options</p>
               </div>
             </section>
           ) : (
             <section className="surface mt-6 p-6 text-center">
-              <p className="font-semibold">{result.list.length ? "You've seen every option." : "Nothing fits right now. Try more time or another mood."}</p>
-              {result.list.length > 0 && <Btn variant="ghost" className="mt-2" onClick={() => setIdx(0)}>Start again</Btn>}
+              <p className="font-semibold">{result.message ?? (result.kind === "exhausted" ? "You've seen every option." : "Nothing fits right now. Try more time or another mood.")}</p>
+              {result.kind === "exhausted" && <Btn variant="ghost" className="mt-2" onClick={() => void runPick()}>Start again</Btn>}
             </section>
           )
         )}

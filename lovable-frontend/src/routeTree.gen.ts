@@ -11,9 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AddRouteImport } from './routes/add'
+import { Route as GroupsRouteImport } from './routes/groups'
 import { Route as PickRouteImport } from './routes/pick'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as WatchlistRouteImport } from './routes/watchlist'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
 import { Route as TitleIdRouteImport } from './routes/title.$id'
 
 const IndexRoute = IndexRouteImport.update({
@@ -24,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const AddRoute = AddRouteImport.update({
   id: '/add',
   path: '/add',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GroupsRoute = GroupsRouteImport.update({
+  id: '/groups',
+  path: '/groups',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PickRoute = PickRouteImport.update({
@@ -41,6 +48,11 @@ const WatchlistRoute = WatchlistRouteImport.update({
   path: '/watchlist',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TitleIdRoute = TitleIdRouteImport.update({
   id: '/title/$id',
   path: '/title/$id',
@@ -50,49 +62,75 @@ const TitleIdRoute = TitleIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/groups': typeof GroupsRoute
   '/pick': typeof PickRoute
   '/search': typeof SearchRoute
   '/watchlist': typeof WatchlistRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/title/$id': typeof TitleIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/groups': typeof GroupsRoute
   '/pick': typeof PickRoute
   '/search': typeof SearchRoute
   '/watchlist': typeof WatchlistRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/title/$id': typeof TitleIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/add': typeof AddRoute
+  '/groups': typeof GroupsRoute
   '/pick': typeof PickRoute
   '/search': typeof SearchRoute
   '/watchlist': typeof WatchlistRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/title/$id': typeof TitleIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/add' | '/pick' | '/search' | '/watchlist' | '/title/$id'
+  fullPaths:
+    | '/'
+    | '/add'
+    | '/groups'
+    | '/pick'
+    | '/search'
+    | '/watchlist'
+    | '/invite/$token'
+    | '/title/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/add' | '/pick' | '/search' | '/watchlist' | '/title/$id'
+  to:
+    | '/'
+    | '/add'
+    | '/groups'
+    | '/pick'
+    | '/search'
+    | '/watchlist'
+    | '/invite/$token'
+    | '/title/$id'
   id:
     | '__root__'
     | '/'
     | '/add'
+    | '/groups'
     | '/pick'
     | '/search'
     | '/watchlist'
+    | '/invite/$token'
     | '/title/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AddRoute: typeof AddRoute
+  GroupsRoute: typeof GroupsRoute
   PickRoute: typeof PickRoute
   SearchRoute: typeof SearchRoute
   WatchlistRoute: typeof WatchlistRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   TitleIdRoute: typeof TitleIdRoute
 }
 
@@ -110,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/add'
       fullPath: '/add'
       preLoaderRoute: typeof AddRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/groups': {
+      id: '/groups'
+      path: '/groups'
+      fullPath: '/groups'
+      preLoaderRoute: typeof GroupsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pick': {
@@ -133,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WatchlistRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/title/$id': {
       id: '/title/$id'
       path: '/title/$id'
@@ -146,9 +198,11 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AddRoute: AddRoute,
+  GroupsRoute: GroupsRoute,
   PickRoute: PickRoute,
   SearchRoute: SearchRoute,
   WatchlistRoute: WatchlistRoute,
+  InviteTokenRoute: InviteTokenRoute,
   TitleIdRoute: TitleIdRoute,
 }
 export const routeTree = rootRouteImport

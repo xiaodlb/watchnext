@@ -1,8 +1,9 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, type ReactNode, type ButtonHTMLAttributes } from "react";
+import { useEffect, useState, type ReactNode, type ButtonHTMLAttributes } from "react";
 import { Film, Tv, Sparkles, Youtube, Plus, List, Shuffle, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { member, useStore, type Kind, type Title } from "@/lib/store";
+import { useStore, type Kind, type Title } from "@/lib/store";
+import { useAuth } from "@/lib/auth";
 
 export function Btn({ variant = "primary", className, ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" }) {
   return (
@@ -21,9 +22,13 @@ export function Btn({ variant = "primary", className, ...p }: ButtonHTMLAttribut
 
 export const kindIcon: Record<Kind, typeof Film> = { Movie: Film, Series: Tv, Anime: Sparkles, YouTube: Youtube };
 
-export function Cover({ t, className }: { t: Pick<Title, "title" | "kind" | "hue">; className?: string }) {
+export function Cover({ t, className }: { t: Pick<Title, "title" | "kind" | "hue"> & { coverUrl?: string | null }; className?: string }) {
   const Icon = kindIcon[t.kind];
   const wide = t.kind === "YouTube";
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { setFailed(false); }, [t.coverUrl]);
+  const safeCover = t.coverUrl && /^https?:\/\//i.test(t.coverUrl) ? t.coverUrl : null;
+  if (safeCover && !failed) return <img src={safeCover} alt={`${t.kind} cover: ${t.title}`} referrerPolicy="no-referrer" onError={() => setFailed(true)} className={cn("rounded-lg object-cover", wide ? "aspect-video" : "aspect-[2/3]", className)} />;
   return (
     <div
       role="img"
@@ -38,6 +43,7 @@ export function Cover({ t, className }: { t: Pick<Title, "title" | "kind" | "hue
 }
 
 export function Avatar({ id, size = "sm" }: { id: string; size?: "sm" | "md" }) {
+  const { member } = useStore();
   const m = member(id);
   return (
     <span className={cn("inline-flex shrink-0 items-center justify-center rounded-full font-bold text-primary-foreground", m.color, size === "sm" ? "h-6 w-6 text-xs" : "h-9 w-9 text-sm")} aria-hidden>
@@ -66,13 +72,14 @@ const NAV = [
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const { user, signOut } = useStore();
+  const { user, workspace, context, loading, logout } = useAuth();
   const nav = useNavigate();
   const path = useRouterState({ select: (s) => s.location.pathname });
   useEffect(() => {
-    if (!user) nav({ to: "/" });
-  }, [user, nav]);
-  if (!user) return null;
+    if (!loading && !user && context.mode !== "legacy") void nav({ to: "/" });
+    else if (!loading && (!context.groupId || (context.mode === "legacy" && !workspace?.profileId))) void nav({ to: "/groups" });
+  }, [user, context, workspace, loading, nav]);
+  if (loading || !context.groupId || (context.mode === "legacy" && !workspace?.profileId) || (!user && context.mode !== "legacy")) return null;
   return (
     <div className="min-h-screen pb-24 md:pb-0">
       <header className="sticky top-0 z-20 border-b bg-card">
@@ -80,7 +87,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link to="/watchlist" className="text-xl font-extrabold tracking-tight">
             Watch<span className="text-primary">Next</span>
           </Link>
-          <span className="hidden rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground sm:inline">Movie nights · 3 members</span>
+          <Link to="/groups" className="hidden rounded-full bg-muted px-3 py-1 text-sm text-muted-foreground sm:inline">{workspace?.selected?.name ?? "Your group"} · {workspace?.members.filter(m => !m.inactive).length ?? 0} members</Link>
           <nav className="ml-auto hidden gap-1 md:flex" aria-label="Main">
             {NAV.map((n) => {
               const active = path.startsWith(n.to) || (n.to === "/add" && path === "/search");
@@ -91,10 +98,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               );
             })}
           </nav>
-          <button onClick={signOut} className="ml-auto flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground hover:bg-muted md:ml-2" aria-label="Sign out">
-            <Avatar id="me" size="md" />
+          <Link to="/groups" className="ml-auto rounded-lg px-2 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted md:ml-2" aria-label="Manage groups">Groups</Link>
+          {context.mode === "account" && <button onClick={() => void logout().then(() => nav({ to: "/" }))} className="flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm text-muted-foreground hover:bg-muted" aria-label="Sign out">
+            {workspace?.currentMemberId && <Avatar id={workspace.currentMemberId} size="md" />}
             <LogOut className="h-4 w-4" aria-hidden />
-          </button>
+          </button>}
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6 md:px-6 md:py-10">{children}</main>

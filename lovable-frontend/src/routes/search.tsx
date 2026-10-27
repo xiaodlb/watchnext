@@ -1,8 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Search } from "lucide-react";
 import { AppShell, Btn, Chip, Cover } from "@/components/ui-kit";
-import { CATALOG, fmtMin, useStore } from "@/lib/store";
+import { fmtMin, useStore, type Kind, type SearchCandidate } from "@/lib/store";
 
 export const Route = createFileRoute("/search")({
   validateSearch: (s: Record<string, unknown>) => ({ q: typeof s["q"] === "string" ? s["q"] : "" }),
@@ -26,13 +26,47 @@ export const Route = createFileRoute("/search")({
 function Results() {
   const { q } = Route.useSearch();
   const nav = useNavigate();
-  const { titles } = useStore();
+  const { titles, search, select } = useStore();
   const [src, setSrc] = useState<"all" | "film" | "yt">("all");
   const [text, setText] = useState(q);
-  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-  let list = CATALOG.filter((c) => words.some((w) => c.title.toLowerCase().includes(w) || c.genres.some((g) => g.toLowerCase().includes(w)) || c.kind.toLowerCase() === w));
-  if (!list.length) list = CATALOG; // prototype: always show something
-  list = list.filter((c) => src === "all" || (src === "yt" ? c.kind === "YouTube" : c.kind !== "YouTube"));
+  const [list, setList] = useState<SearchCandidate[]>([]);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState("");
+  useEffect(() => {
+    let active = true;
+    if (!q.trim()) { setList([]); return; }
+    setLoading(true); setError(""); setList([]);
+    const isVideoLink = /(?:youtu\.be|youtube\.com)/i.test(q);
+    const sources = isVideoLink ? ["youtube" as const] : src === "film" ? ["kinopoisk" as const] : src === "yt" ? ["youtube" as const] : ["kinopoisk" as const, "youtube" as const];
+    void Promise.allSettled(sources.map(source => search(q, source))).then(results => {
+      if (!active) return;
+      const candidates: SearchCandidate[] = [];
+      const failures: string[] = [];
+      for (const result of results) {
+        if (result.status === "rejected") { failures.push(result.reason instanceof Error ? result.reason.message : "Search is unavailable."); continue; }
+        candidates.push(...result.value.candidates);
+        if (result.value.review) {
+          const review = result.value.review; const d = review.draft;
+          candidates.push({ id: review.providerId, title: d.title ?? "YouTube video", kind: "YouTube", minutes: Math.ceil((d.duration?.seconds ?? 0) / 60), coverUrl: d.coverUrl, handle: review.handle, source: "review" });
+          if (typeof window !== "undefined") sessionStorage.setItem(`watchnext_search_review_${review.handle}`, JSON.stringify(review));
+        }
+      }
+      setList(candidates); setError(failures.join(" ")); setLoading(false);
+    });
+    return () => { active = false; };
+  }, [q, src]);
+  async function review(c: SearchCandidate) {
+    setBusy(c.id); setError("");
+    try {
+      const raw = c.source === "review" ? JSON.parse(sessionStorage.getItem(`watchnext_search_review_${c.handle}`) ?? "null") : await select(c);
+      if (!raw?.draft) throw new Error("The selected title could not be loaded. Search again.");
+      sessionStorage.setItem("watchnext_review", JSON.stringify(raw));
+      const typeMap: Record<string, Kind> = { movie: "Movie", series: "Series", anime: "Anime", youtube: "YouTube" };
+      await nav({ to: "/add", search: { q: raw.draft.title ?? c.title, kind: typeMap[raw.draft.contentType] ?? c.kind } });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Could not review this title."); }
+    finally { setBusy(""); }
+  }
 
   return (
     <>
@@ -47,22 +81,22 @@ function Results() {
         <Chip active={src === "film"} onClick={() => setSrc("film")}>Movies & shows</Chip>
         <Chip active={src === "yt"} onClick={() => setSrc("yt")}>YouTube</Chip>
       </div>
-      <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">{list.length} results</p>
+      <p className="mt-4 text-sm text-muted-foreground" aria-live="polite">{loading ? "Searching…" : `${list.length} results`}</p>
+      {error && <p role="alert" className="mt-3 rounded-lg bg-destructive/10 p-3 text-sm">{error} You can still add a title manually.</p>}
       <ul className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {list.map((c) => {
           const inList = titles.some((t) => t.title === c.title && t.kind === c.kind);
           return (
             <li key={c.title} className="surface flex gap-4 p-3">
-              <Cover t={c} className={c.kind === "YouTube" ? "w-40 shrink-0 self-start" : "w-24 shrink-0"} />
+              <Cover t={{ ...c, hue: 0 }} className={c.kind === "YouTube" ? "w-40 shrink-0 self-start" : "w-24 shrink-0"} />
               <div className="flex min-w-0 flex-1 flex-col">
                 <p className="font-bold leading-snug">{c.title}</p>
                 <p className="text-sm text-muted-foreground">{c.kind} · {c.channel ?? c.year} · {fmtMin(c.minutes)}</p>
-                <p className="text-sm text-muted-foreground">{c.genres.join(", ")}</p>
                 <div className="mt-auto pt-3">
                   {inList ? (
                     <span className="text-sm font-semibold text-success">Already in your list</span>
                   ) : (
-                    <Btn variant="secondary" className="w-full" onClick={() => nav({ to: "/add", search: { q: c.title, kind: c.kind, minutes: c.minutes, genres: c.genres.join(", ") } })}>Review & add</Btn>
+                    <Btn variant="secondary" disabled={!!busy} className="w-full" onClick={() => void review(c)}>{busy === c.id ? "Loading…" : "Review & add"}</Btn>
                   )}
                 </div>
               </div>

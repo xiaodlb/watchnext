@@ -7,6 +7,18 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  vite: {
+    server: {
+      proxy: {
+        // The browser uses one origin; the account cookie and mutation Origin
+        // remain intact while /v1 is served by the private WatchNext backend.
+        "^/v1(?:/|$)": {
+          target: process.env["WATCHNEXT_BACKEND_ORIGIN"] ?? "http://127.0.0.1:3100",
+          changeOrigin: false,
+        },
+      },
+    },
+  },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this

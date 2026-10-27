@@ -5,8 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@11.25.0",
   "scripts": {
-    "dev": "pnpm --dir lovable-frontend install --ignore-workspace --frozen-lockfile && cd lovable-frontend && node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 3000",
-    "dev:next": "node --import ./scripts/framework-privacy.mjs node_modules/next/dist/bin/next dev --hostname 127.0.0.1",
+    "dev": "pnpm --dir lovable-frontend install --ignore-workspace --frozen-lockfile && node --env-file-if-exists=.env.local scripts/dev-together.mjs",
     "build": "next build",
     "start": "node --import ./scripts/framework-privacy.mjs node_modules/next/dist/bin/next start --hostname 127.0.0.1",
     "test": "vitest run",

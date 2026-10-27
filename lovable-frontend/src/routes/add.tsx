@@ -35,23 +35,32 @@ function AddTitle() {
   const s = Route.useSearch();
   const nav = useNavigate();
   const { add } = useStore();
+  const [review] = useState(() => { if (!s.q || typeof window === "undefined") return null; try { const raw = sessionStorage.getItem("watchnext_review"); sessionStorage.removeItem("watchnext_review"); return raw ? JSON.parse(raw) : null; } catch { return null; } });
+  const imported = review?.draft;
   const [query, setQuery] = useState("");
-  const [title, setTitle] = useState(s["q"] ?? "");
+  const [title, setTitle] = useState(imported?.title ?? s["q"] ?? "");
   const [kind, setKind] = useState<Kind>(s["kind"] ?? "Movie");
-  const [minutes, setMinutes] = useState(s["minutes"] ? String(s["minutes"]) : "");
+  const [minutes, setMinutes] = useState(imported?.duration?.seconds ? String(Math.ceil(imported.duration.seconds / 60)) : s["minutes"] ? String(s["minutes"]) : "");
   const [moods, setMoods] = useState<Mood[]>((s["moods"]?.split(",").filter(Boolean) as Mood[]) ?? []);
-  const [genres, setGenres] = useState(s["genres"] ?? "");
+  const [genres, setGenres] = useState<string>(imported?.genres?.join(", ") ?? s["genres"] ?? "");
+  const [watchUrl, setWatchUrl] = useState<string>(imported?.watchUrl ?? "");
+  const [pending, setPending] = useState(false);
   const [err, setErr] = useState("");
   const episodic = kind === "Series" || kind === "Anime";
 
-  const save = (e: FormEvent) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault();
     const m = Number(minutes);
     if (!title.trim()) return setErr("Add a title.");
     if (!Number.isInteger(m) || m < 1) return setErr("Add a runtime in whole minutes.");
     if (!moods.length) return setErr("Pick at least one mood.");
-    const id = add({ title: title.trim(), kind, minutes: m, moods, genres: genres.split(",").map((g) => g.trim()).filter(Boolean).slice(0, 10), hue: Math.floor(Math.random() * 360) });
-    nav({ to: "/title/$id", params: { id } });
+    setPending(true); setErr("");
+    try {
+      const originalSeconds = imported?.duration?.seconds;
+      const id = await add({ title: title.trim(), kind, minutes: m, ...(typeof originalSeconds === "number" && m === Math.ceil(originalSeconds / 60) ? { durationSeconds: originalSeconds } : {}), moods, genres: genres.split(",").map((g) => g.trim()).filter(Boolean).slice(0, 10), watchUrl, sourceUrl: imported?.sourceUrl, coverUrl: imported?.coverUrl }, review?.handle);
+      await nav({ to: "/title/$id", params: { id } });
+    } catch (cause) { setErr(cause instanceof Error ? cause.message : "Could not save title."); }
+    finally { setPending(false); }
   };
 
   return (
@@ -85,6 +94,7 @@ function AddTitle() {
             })}
           </div>
         </fieldset>
+        <label className="block"><span className="mb-1 block text-sm font-semibold">Watch link <span className="font-normal text-muted-foreground">(optional)</span></span><input className="field" type="url" value={watchUrl} onChange={(e) => setWatchUrl(e.target.value)} /></label>
         <label className="block">
           <span className="mb-1 block text-sm font-semibold">Title</span>
           <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} />
@@ -108,7 +118,7 @@ function AddTitle() {
           </div>
         </fieldset>
         {err && <p role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm font-semibold text-destructive">{err}</p>}
-        <Btn type="submit" className="w-full sm:w-auto">Save to list</Btn>
+        <Btn type="submit" disabled={pending} className="w-full sm:w-auto">{pending ? "Saving…" : "Save to list"}</Btn>
       </form>
     </div>
   );

@@ -4,7 +4,7 @@ import { getDatabase } from "../../db/server";
 import { getGroupRequest } from "../../lib/access";
 import { configuredMetadataProviders } from "../../lib/metadata/providers";
 import { refreshTitleMetadata } from "../../lib/metadata/reviews";
-import type { RefreshState } from "./refresh-controls";
+type RefreshState = { kind: "idle" | "done" | "error"; message?: string };
 export async function refreshMetadataAction(contextKey: string | undefined, id: string, _previous: RefreshState, _form: FormData): Promise<RefreshState> {
   try {
     const result = await refreshTitleMetadata(getDatabase(), await getGroupRequest(true, contextKey), id, configuredMetadataProviders(), process.env.WATCHNEXT_APP_ORIGIN);

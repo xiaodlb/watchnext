@@ -12,6 +12,7 @@ import { prismaIdentityClient, verifyPrismaIdentitySQLiteAdapter } from "./ident
 import { handlePrismaIdentity } from "./identity-service";
 import { metadataProvidersForHttp } from "../http-memory/service";
 import { lookupMetadata } from "../metadata/lookup";
+import { youtubeLookupQuery } from "../metadata/youtube-input";
 
 type Input = Record<string, unknown>;
 type Context = { mode: "account" | "legacy"; groupId: string; memberId: string | null; revision: number; accountId: string | null; sessionHash: string; sessionId: string };
@@ -100,16 +101,28 @@ async function updateTitle(id: string, c: Context, value: Input) {
   return responseTitle(id, c);
 }
 
-async function picker(c: Context, value: Input) {
+type PickerCycle = { owner: string; groupId: string; revision: number; input: Input; signature: string; index: number; step: string; expires: number };
+const pickerCycles = new Map<string, PickerCycle>();
+async function picker(c: Context, value: Input, next?: { id: string; step: string }) {
   if (!c.memberId || !Array.isArray(value.viewerIds) || !value.viewerIds.every(v => typeof v === "string") || !Number.isInteger(value.availableMinutes) || typeof value.mood !== "string" || typeof value.rewatches !== "boolean") throw new AuthError("Choose viewers, whole available minutes, one mood, and a rewatch setting.");
   const db = prismaIdentityClient();
   const members: any[] = c.mode === "account" ? await db.member.findMany({ where: { groupId: c.groupId, accountMembership: { is: { status: "active" } } } }) : await db.member.findMany({ where: { groupId: c.groupId } });
   const titles: any[] = await db.title.findMany({ where: { groupId: c.groupId }, include: { titleMoods: true, progress: true } });
   const ranked = rankCandidates({ groupId: c.groupId, members: members.map(m => ({ id: m.id, groupId: c.groupId })), titles: titles.map(t => ({ id: t.id, groupId: t.groupId, archived: t.archived, title: t.title, contentType: t.contentType, durationSeconds: t.durationSeconds, numberingStyle: t.numberingStyle, moods: t.titleMoods.map((m: any) => m.moodCode), createdAt: t.createdAt })), progress: titles.flatMap(t => t.progress.map((p: any) => ({ titleId: t.id, memberId: p.memberId, groupId: t.groupId, numberingStyle: p.numberingStyle, completed: p.completed, positionState: p.positionState, nextSeason: p.nextSeason, nextEpisode: p.nextEpisode }))), selectedViewerIds: value.viewerIds as string[], availableMinutes: value.availableMinutes as number, mood: value.mood as any, rewatches: value.rewatches });
   if (ranked.kind === "ranked") {
-    const candidate = ranked.candidates[0], title = titles.find(value => value.id === candidate.titleId);
+    const signature = hash(JSON.stringify(ranked.candidates));
+    const previous = next && pickerCycles.get(next.id);
+    if (next && (!previous || previous.owner !== c.sessionHash || previous.groupId !== c.groupId || previous.revision !== c.revision || previous.expires <= Date.now() || previous.step !== next.step)) throw new AuthError("This picking cycle expired or changed. Start again.");
+    const refreshed = Boolean(previous && previous.signature !== signature);
+    const index = previous && !refreshed ? previous.index + 1 : 0;
+    if (index >= ranked.candidates.length) { if (next) pickerCycles.delete(next.id); return json({ kind: "exhausted", message: "All matches shown. Start again to see them again.", context: contextDto(c) }); }
+    const candidate = ranked.candidates[index], title = titles.find(value => value.id === candidate.titleId);
     if (!title) throw new AuthError("The selected title is no longer available.");
-    return json({ kind: "picked", refreshed: false, candidate: { id: title.id, title: title.title, contentType: title.contentType, durationSeconds: candidate.durationSeconds, watchUrl: safeUrl(title.watchUrl), target: candidate.target, rewatchingViewerIds: candidate.rewatchingViewerIds.map((id: string) => memberDto(members.find(member => member.id === id) ?? { id, name: "Former member", avatarColor: "slate", inactive: true })), tier: candidate.tier, message: candidate.message, availableMinutes: value.availableMinutes, requestedMood: value.mood, rewatches: value.rewatches === true }, cycle: { cycleId: randomUUID(), step: "0" }, context: contextDto(c) });
+    const cycleId = next?.id ?? randomUUID(), step = randomUUID();
+    for (const [id, cycle] of pickerCycles) if (cycle.expires <= Date.now()) pickerCycles.delete(id);
+    if (!next && pickerCycles.size >= 512) pickerCycles.delete(pickerCycles.keys().next().value!);
+    pickerCycles.set(cycleId, { owner: c.sessionHash, groupId: c.groupId, revision: c.revision, input: { viewerIds: value.viewerIds, availableMinutes: value.availableMinutes, mood: value.mood, rewatches: value.rewatches }, signature, index, step, expires: previous?.expires ?? Date.now() + 30 * 60 * 1000 });
+    return json({ kind: "picked", refreshed, candidate: { id: title.id, title: title.title, contentType: title.contentType, durationSeconds: candidate.durationSeconds, watchUrl: safeUrl(title.watchUrl), target: candidate.target, rewatchingViewerIds: candidate.rewatchingViewerIds.map((id: string) => memberDto(members.find(member => member.id === id) ?? { id, name: "Former member", avatarColor: "slate", inactive: true })), tier: candidate.tier, message: candidate.message, availableMinutes: value.availableMinutes, requestedMood: value.mood, rewatches: value.rewatches === true }, cycle: { cycleId, step }, context: contextDto(c) });
   }
   if (ranked.kind === "no_match") return json({ kind: "no_match", refreshed: false, message: ranked.message, reasons: ranked.reasons, actions: ranked.actions, context: contextDto(c) });
   throw new AuthError(ranked.message);
@@ -152,10 +165,18 @@ export async function handlePrismaApplication(request: Request, path: string[]):
     if (match && (request.method === "PUT" || request.method === "DELETE")) { expected(body, c); if (!c.memberId) throw new AuthError("Choose a profile before changing this library."); if (request.method === "PUT" && typeof body.note !== "string") throw new AuthError("Enter a note."); await repo.patchPersonal(c.groupId, c.memberId, match[1], { note: request.method === "DELETE" ? null : body.note as string }, access(c)); return responseTitle(match[1], c); }
     if (key === "picker/inputs" && request.method === "GET") { const db = prismaIdentityClient(); const members: any[] = c.mode === "account" ? await db.member.findMany({ where: { groupId: c.groupId, accountMembership: { is: { status: "active" } } } }) : await db.member.findMany({ where: { groupId: c.groupId } }); return json({ groupId: c.groupId, mode: c.mode, viewers: members.map(memberDto), canAddTitle: true, context: contextDto(c) }); }
     if (key === "picker/pick" && request.method === "POST") { expected(body, c); return picker(c, body); }
+    match = /^picker\/cycles\/([^/]+)\/next$/.exec(key);
+    if (match && request.method === "POST") {
+      expected(body, c); const cycle = pickerCycles.get(match[1]);
+      if (!cycle || typeof body.step !== "string") throw new AuthError("This picking cycle expired or changed. Start again.");
+      return picker(c, cycle.input, { id: match[1], step: body.step });
+    }
     if (key === "metadata/search" && request.method === "POST") {
       expected(body, c); if (!c.memberId || typeof body.query !== "string" || !body.query.trim() || (body.source !== "youtube" && body.source !== "kinopoisk")) throw new AuthError("Enter a supported metadata search.");
       const source = body.source === "youtube" ? "youtube" : "kinopoisk_unofficial", provider = metadataProvidersForHttp()[source]!, navigation: { next?: string; previous?: string } = {};
-      const result: any = await lookupMetadata(provider, body.kind === "link" ? { kind: "detail", externalId: body.query.trim() } : { kind: "search", text: body.query.trim() }, { signal: request.signal, onPage: page => Object.assign(navigation, page) });
+      const query = body.kind === "link" && source === "youtube" ? youtubeLookupQuery(body.query.trim()) : { kind: "search" as const, text: body.query.trim() };
+      if (!query) throw new AuthError("Enter a valid YouTube video link or ID.");
+      const result: any = await lookupMetadata(provider, query, { signal: request.signal, onPage: page => Object.assign(navigation, page) });
       if (result.kind === "no_match") return json({ ...result, context: contextDto(c) });
       if (result.kind === "candidates") { const review = await repo.createPendingPage({ groupId: c.groupId, memberId: c.memberId, sessionId: c.sessionId, scope: source, payload: { source, query: body.query.trim(), candidates: result.candidates, next: navigation.next, previous: navigation.previous, visits: 1 }, access: access(c) }); return json({ handle: review.handle, source: body.source, query: body.query.trim(), page: 1, visits: 1, previous: !!navigation.previous, next: !!navigation.next, candidates: result.candidates, context: contextDto(c) }); }
       if (result.kind === "available" || result.kind === "incomplete") { const review = await repo.createReview({ groupId: c.groupId, memberId: c.memberId, sessionId: c.sessionId, scope: source, payload: { source, item: result.item }, access: access(c) }); return json({ handle: review.handle, source: body.source, providerId: result.item.identity.externalId, draft: { ...result.item, moods: [] }, expiresAt: review.expiresAt, notice: "Review imported fields before saving.", context: contextDto(c) }); }
