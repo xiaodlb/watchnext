@@ -32,7 +32,7 @@ it("announces pending and disables duplicate operations, then shows completion/u
 it("no selected profile gets real navigation; archived and movie/video details expose no episodic mutations", () => {
   const action = async (): Promise<EpisodeState> => ({ kind: "idle" });
   const view = render(<DetailView detail={{ ...detail, activeMemberId: null }} episodeAction={action} />);
-  expect(screen.getByRole("link", { name: "Choose profile" }).getAttribute("href")).toBe("/group"); expect(screen.getByText("Member history")).toBeTruthy(); expect(screen.queryByText("Save episode progress")).toBeNull();
+  expect(screen.getByRole("link", { name: "Choose profile" }).getAttribute("href")).toBe("/group"); expect(screen.getByText("From the group")).toBeTruthy(); expect(screen.queryByText("Save episode progress")).toBeNull();
   view.rerender(<DetailView detail={{ ...detail, archived: true }} episodeAction={action} />); expect(screen.queryByText("Save episode progress")).toBeNull();
   for (const contentType of ["movie", "youtube"]) { view.rerender(<DetailView detail={{ ...detail, contentType, numberingStyle: "none" }} episodeAction={action} />); expect(screen.queryByText("Your episode progress")).toBeNull(); }
   view.rerender(<DetailView detail={{ ...detail, title: null, contentType: null, durationSeconds: null }} episodeAction={action} />); expect(screen.getByText("Save episode progress")).toBeTruthy();

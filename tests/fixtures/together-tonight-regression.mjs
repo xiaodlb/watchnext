@@ -5,12 +5,15 @@ import { createFixture, safeDiagnostic } from "../e2e/lifecycle.mjs";
 
 // A real isolated production regression, not a mock-service or component test.
 let fixture, failure, current = "setup";
-const evidenceDirectory = resolve(process.cwd(), "_docs/evidence/together-tonight-73");
-const retainEvidence = process.env.WATCHNEXT_CAPTURE_73_EVIDENCE === "1";
+const sourcePortCapture = process.env.WATCHNEXT_CAPTURE_75_EVIDENCE === "1";
+const evidenceRelative = sourcePortCapture ? "_docs/evidence/source-page-port-75" : "_docs/evidence/together-tonight-73";
+const evidenceDirectory = resolve(process.cwd(), evidenceRelative);
+const retainEvidence = sourcePortCapture || process.env.WATCHNEXT_CAPTURE_73_EVIDENCE === "1";
 const expectedEvidence = [
   "sign-in-1280", "watchlist-1280", "add-1280", "search-1280", "detail-1280", "picker-input-1280", "picker-result-1280",
   "sign-in-375", "watchlist-375", "add-375", "search-375", "detail-375", "picker-input-375", "picker-result-375",
 ];
+const registrationEvidence = ["register-1280", "register-375"];
 const recordedEvidence = [];
 const check = (value, expected) => { if (!value) throw new Error(`Expected ${expected}; observed false`); };
 const step = async (name, run) => { current = name; await run(); console.log(`PASS ${name}`); };
@@ -26,9 +29,9 @@ function pngGeometry(path) {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
-function verifyCommittedEvidence() {
-  for (const name of expectedEvidence) {
-    const path = join(evidenceDirectory, `${name}.png`);
+function verifyCommittedEvidence(directory = evidenceDirectory, names = expectedEvidence) {
+  for (const name of names) {
+    const path = join(directory, `${name}.png`);
     check(existsSync(path), `committed visual evidence ${name} exists`);
     const image = pngGeometry(path);
     const expectedWidth = name.endsWith("-1280") ? 1280 : 375;
@@ -81,7 +84,13 @@ async function showSearchControls(page) {
   await field(page, "Entry method").selectOption("kinopoisk_unofficial");
   await field(page, "Title to search").fill("source composition");
   await press(page, "Search titles");
-  await page.getByRole("region", { name: "Search results", exact: true }).waitFor();
+  const results = page.getByRole("region", { name: "Search results", exact: true });
+  await results.waitFor();
+  await results.getByRole("button", { name: "Review Synthetic ambiguous film (2001)", exact: true }).waitFor();
+  await results.getByRole("button", { name: "YouTube", exact: true }).click();
+  await results.getByRole("button", { name: "Review Synthetic YouTube proposal", exact: true }).waitFor();
+  await results.getByRole("button", { name: "Movies & shows", exact: true }).click();
+  await results.getByRole("button", { name: "Review Synthetic ambiguous film (2001)", exact: true }).waitFor();
   check(await page.locator(".form-fields").count() >= 1, "the real source-style search and manual-entry surface");
 }
 
@@ -100,6 +109,27 @@ async function boundedSurface(page, selector, label, maximum = 800) {
   const surface = await box(page.locator(selector));
   check(surface.width <= maximum, `${label} is a bounded source-style working surface; observed ${Math.round(surface.width)}px`);
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${label} has no horizontal clipping`);
+}
+
+// #75: the ready Together Tonight Add page has two independent cards/forms.
+// Earlier adaptations kept one old details form with lookup controls inside it.
+async function sourceAddComposition(page, width) {
+  const pageBody = page.locator(".page-content");
+  const forms = pageBody.locator("form");
+  const count = await forms.count();
+  check(count >= 2, `the ${width}px Add screen has separate search and manual-entry forms; observed ${count}`);
+  const search = forms.first(), manual = forms.last();
+  check(await search.getByRole("textbox", { name: /search title|paste youtube/i }).count() === 1,
+    `the ${width}px search card contains a search/link field`);
+  check(await search.getByRole("button", { name: /search/i }).count() === 1,
+    `the ${width}px search card has its own Search action`);
+  const types = manual.locator("button[aria-pressed]");
+  check(await types.count() === 4, `the ${width}px manual card has four selectable content-type tiles`);
+  for (const label of ["Movie", "Series", "Anime", "YouTube video"]) {
+    check(await types.filter({ hasText: label }).count() === 1, `the ${width}px ${label} tile is visible`);
+  }
+  check(await pageBody.evaluate(node => document.documentElement.scrollWidth <= innerWidth),
+    `the ${width}px Add composition does not clip horizontally`);
 }
 
 async function gridMetrics(page, expectedColumns, width) {
@@ -130,7 +160,15 @@ async function desktop(page, film, video) {
   const auth = await box(card), viewport = page.viewportSize(); check(Math.abs(auth.x + auth.width / 2 - viewport.width / 2) < 4, "a centred Together Tonight-style account card at 1280px");
   check(await page.locator(".site-header").isVisible() === false, "no application header on account entry");
   await captureComposition(page, "sign-in-1280");
+  if (sourcePortCapture) { await page.goto(fixture.origin + "/register"); await page.locator(".auth-card").waitFor(); await captureComposition(page, "register-1280"); }
   await page.goto(fixture.origin + "/watchlist"); await page.getByRole("heading", { name: "Visual regression group", exact: true }).waitFor();
+  const account = page.getByRole("link", { name: "Account and sign out", exact: true });
+  await account.waitFor();
+  const activeMember = fixture.db.prepare("SELECT m.name,m.avatar_color FROM members m JOIN account_memberships a ON a.member_id=m.id AND a.group_id=m.group_id JOIN groups g ON g.id=m.group_id WHERE g.name=? AND a.status='active'").get("Visual regression group");
+  check(Boolean(activeMember), "the active account member exists in the isolated SQLite schema");
+  check(await account.getAttribute("href") === "/account" && await account.getAttribute("title") === activeMember.name, "the header avatar links to the real active account");
+  const expectedColor = await page.evaluate(color => { const probe = document.createElement("span"); probe.style.backgroundColor = color; return probe.style.backgroundColor; }, activeMember.avatar_color);
+  check(await account.locator(".avatar").textContent() === "V" && await account.locator(".avatar").evaluate(node => node.style.backgroundColor) === expectedColor, "the header renders the persisted member initial and avatar_color");
   await page.getByRole("link", { name: "Add title", exact: true }).waitFor(); await page.getByRole("navigation", { name: "Watchlist filter" }).waitFor();
   await page.getByLabel("Content type filter").getByRole("button", { name: "Movies" }).waitFor();
   check(await page.locator(".watchlist-items").evaluate(node => getComputedStyle(node).display === "grid"), "a real shared watchlist card grid");
@@ -145,9 +183,9 @@ async function desktop(page, film, video) {
   check(await firstCard.locator(".contributor-list .avatar").count() > 0, "a visible contributor avatar below each source-style card");
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "no desktop horizontal clipping");
   await page.goto(fixture.origin + "/watchlist/add");
-  await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "desktop add form"); await captureComposition(page, "add-1280");
+  await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "desktop add form"); await sourceAddComposition(page, 1280); await captureComposition(page, "add-1280");
   await showSearchControls(page);
-  await boundedSurface(page, ".page-content", "desktop search results"); await captureComposition(page, "search-1280");
+  await boundedSurface(page, ".page-content", "desktop search results", 1152); await captureComposition(page, "search-1280");
   await page.goto(fixture.origin + `/watchlist/${film}`); const portrait = page.locator(".detail-metadata > .title-cover"); await portrait.waitFor(); const poster = await ratio(portrait); check(poster > .62 && poster < .71, "portrait film detail cover geometry (2:3)"); await captureComposition(page, "detail-1280");
   await page.goto(fixture.origin + `/watchlist/${video}`); const preview = page.locator(".detail-metadata > .video-cover"); await preview.waitFor(); const wide = await ratio(preview); check(wide > 1.7 && wide < 1.84, "16:9 YouTube detail preview geometry");
   await page.goto(fixture.origin + "/pick"); await page.getByRole("heading", { name: "Pick for me", exact: true }).waitFor(); await boundedSurface(page, ".picker-page", "desktop picker form"); await captureComposition(page, "picker-input-1280"); await page.locator(".picker-viewers input[type=checkbox]").first().check(); await field(page, "Available time (whole minutes)").fill("25"); await field(page, "Mood").selectOption("funny"); await press(page, "Pick for me"); await page.getByText("Your suggestion is ready.", { exact: true }).waitFor(); await page.locator(".picker-page > .group-result").waitFor(); await captureComposition(page, "picker-result-1280");
@@ -168,7 +206,8 @@ async function mobile(page, film, video) {
   // Group/Archive/Account strip above the source-style primary bottom nav.
   check(await page.getByRole("navigation", { name: "Other destinations" }).isVisible() === false, "the reference-style mobile shell has no extra legacy utility strip above its Watchlist/Add/Pick for me bottom navigation");
   await page.goto(fixture.origin + "/"); await page.locator(".auth-card").waitFor(); await captureComposition(page, "sign-in-375");
-  await page.goto(fixture.origin + "/watchlist/add"); await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "mobile add form", 375); await captureComposition(page, "add-375");
+  if (sourcePortCapture) { await page.goto(fixture.origin + "/register"); await page.locator(".auth-card").waitFor(); await captureComposition(page, "register-375"); }
+  await page.goto(fixture.origin + "/watchlist/add"); await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "mobile add form", 375); await sourceAddComposition(page, 375); await captureComposition(page, "add-375");
   await showSearchControls(page); await boundedSurface(page, ".page-content", "mobile search results", 375); await captureComposition(page, "search-375");
   await page.goto(fixture.origin + `/watchlist/${film}`); const portrait = page.locator(".detail-metadata > .title-cover"); await portrait.waitFor(); check(await ratio(portrait) > .62, "stacked portrait film detail at 375px"); await captureComposition(page, "detail-375");
   await page.goto(fixture.origin + `/watchlist/${video}`); const preview = page.locator(".detail-metadata > .video-cover"); await preview.waitFor(); const wide = await ratio(preview); check(wide > 1.7 && wide < 1.84, "16:9 YouTube preview geometry at 375px");
@@ -191,13 +230,15 @@ try {
   await step("1280px source-derived account/list/detail/picker composition", () => desktop(page, globalThis.ids.film, globalThis.ids.video));
   await step("375px source-derived compact shell and real preview geometry", () => mobile(page, globalThis.ids.film, globalThis.ids.video));
   if (retainEvidence) {
-    check(recordedEvidence.length === expectedEvidence.length && expectedEvidence.every(name => recordedEvidence.includes(name)), "every required durable source-comparison screen was captured");
-    verifyCommittedEvidence();
+    const capturedNames = sourcePortCapture ? [...expectedEvidence, ...registrationEvidence] : expectedEvidence;
+    check(recordedEvidence.length === capturedNames.length && capturedNames.every(name => recordedEvidence.includes(name)), "every required durable source-comparison screen was captured");
+    verifyCommittedEvidence(evidenceDirectory, capturedNames);
   } else {
     verifyCommittedEvidence();
+    verifyCommittedEvidence(resolve(process.cwd(), "_docs/evidence/source-page-port-75"), registrationEvidence);
   }
   await context.close(); await fixture.audit();
 } catch (error) { failure = error; }
 finally { try { await fixture?.cleanup(); } catch (error) { failure ??= error; } }
 if (failure) { console.error(`FAIL ${current}: ${safeDiagnostic(failure, fixture?.secrets ?? [], fixture?.root ?? "<none>", fixture ? [fixture.sentinelRoot] : [])}`); console.error(`Owned cleanup complete: ${fixture?.cleanupComplete ?? false}; ${retainEvidence ? "only the explicitly requested synthetic evidence captures were retained." : "no screenshots, traces, HAR or video retained."}`); process.exitCode = 1; }
-else console.log(JSON.stringify({ pass: true, widths: [1280, 375], realAuthorisedData: true, sourceReferenceShell: true, committedEvidence: retainEvidence, evidenceDirectory: retainEvidence ? "_docs/evidence/together-tonight-73" : undefined, ownedCleanup: fixture.cleanupComplete }));
+else console.log(JSON.stringify({ pass: true, widths: [1280, 375], realAuthorisedData: true, sourceReferenceShell: true, committedEvidence: retainEvidence, evidenceDirectory: retainEvidence ? evidenceRelative : undefined, ownedCleanup: fixture.cleanupComplete }));

@@ -37,6 +37,7 @@ export function Navigation() {
             return (
               <li key={href}>
                 <Link className="navigation-link" href={href} aria-current={active ? "page" : undefined}>
+                  <span className={`source-nav-icon source-nav-${label.toLowerCase().replaceAll(" ", "-")}`} aria-hidden="true" />
                   {label}
                 </Link>
               </li>

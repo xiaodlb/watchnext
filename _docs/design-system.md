@@ -1,5 +1,16 @@
 # Initial design baseline
 
+## Together Tonight page composition — issue #75
+
+The current page structure follows the pinned Together Tonight source mapped in
+[`together-tonight-reference.md`](together-tonight-reference.md). Keep the compact
+white header and mobile bottom navigation; use a five-column desktop/two-column
+mobile cover grid, varied title-bearing fallback covers, separate compact search
+and manual Add cards, a wide search-results page state, a cover-led detail with
+personal controls below it, and a narrow chip-driven picker. Preserve live
+account and group context, real provider decisions, and saved progress. Capture
+both 1280px and 375px production screenshots before declaring a visual change done.
+
 Current account/discovery delivery and historical boundaries are mapped in [enhancement-audit.md](enhancement-audit.md). Account groups use live authenticated membership/context identity; only separate legacy groups use trusted selectable names. Later issue-specific sections supersede first-release restrictions without converting old groups.
 
 ## Account/discovery extension

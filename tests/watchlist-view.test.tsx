@@ -64,11 +64,11 @@ it("filters the already-authorized library by type without changing the server-b
  render(<WatchlistContent view={{activeMemberId:"anna",canFilter:true,filter:"all",items:[fixture,youtube]}}/>);
  expect(screen.getByText("2 titles")).toBeTruthy();
  fireEvent.click(screen.getByRole("button",{name:"YouTube"}));
- expect(screen.getByText("Shared video")).toBeTruthy();
+ expect(screen.getByRole("article",{name:"Shared video"})).toBeTruthy();
  expect(screen.queryByText("Shared film")).toBeNull();
  expect(screen.getByRole("link",{name:"Added by me"}).getAttribute("href")).toBe("/watchlist?filter=mine");
- fireEvent.click(screen.getByRole("button",{name:"All"}));
- expect(screen.getByText("Shared film")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button",{name:"YouTube"}));
+ expect(screen.getByRole("article",{name:"Shared film"})).toBeTruthy();
 });
 it("keeps an authorized YouTube entry in the reference-style card grid with its wide preview",()=>{
  const youtube: WatchlistItem={...fixture,id:"video",title:"Shared video",contentType:"youtube",coverUrl:"https://i.ytimg.com/vi/YtFixture01/default.jpg"};

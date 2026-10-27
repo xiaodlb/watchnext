@@ -84,9 +84,9 @@ export function pickFromForm(db: DatabaseSync, request: Request, form: FormData,
       if (result.kind === "ranked" && index >= result.candidates.length) response = { ...reply, kind: "exhausted", ...cycle! };
       else if (result.kind === "ranked") {
       const first = result.candidates[index], title = data.titles[first.inputIndex];
-      const url = db.prepare("SELECT watch_url FROM titles WHERE id=? AND group_id=?").get(first.titleId, context.groupId)!.watch_url;
+      const media = db.prepare("SELECT watch_url,cover_url FROM titles WHERE id=? AND group_id=?").get(first.titleId, context.groupId)!;
       response = { ...reply, kind: "picked", ...cycle, pick: { id: first.titleId, title: title.title!, contentType: title.contentType!, durationSeconds: first.durationSeconds,
-        tier: first.tier, message: first.message, target: first.target, watchUrl: safeExternalUrl(url),
+        tier: first.tier, message: first.message, target: first.target, watchUrl: safeExternalUrl(media.watch_url), coverUrl: media.cover_url as string | null,
         rewatchers: first.rewatchingViewerIds.map(id => currentMembers.find(member => member.id === id)!),
         viewers: selected.map(id => currentMembers.find(member => member.id === id)!), availableMinutes: String(result.context.availableMinutes),
         requestedMood: fixedMoods.find(mood => mood.value === result.context.mood)!.label, rewatches: result.context.rewatches } };
