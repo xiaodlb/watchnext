@@ -6,7 +6,7 @@ export type PickerField = "viewers" | "availableMinutes" | "mood" | "rewatches" 
 export type PickView = {
   id: string; title: string; contentType: string; durationSeconds: number; tier: CandidateTier; message: string;
   target: { readonly kind: "item" } | EpisodeTarget; rewatchers: Profile[]; viewers: Profile[];
-  availableMinutes: string; requestedMood: string; rewatches: boolean; watchUrl: string | null;
+  availableMinutes: string; requestedMood: string; rewatches: boolean; watchUrl: string | null; coverUrl?: string | null;
 };
 export type PickState = { kind: "idle" } | ({ requestId: string; groupId: string } & (
   { kind: "invalid"; errors: Partial<Record<PickerField, string>> } |

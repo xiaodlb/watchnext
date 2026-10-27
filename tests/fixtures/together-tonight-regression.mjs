@@ -5,8 +5,10 @@ import { createFixture, safeDiagnostic } from "../e2e/lifecycle.mjs";
 
 // A real isolated production regression, not a mock-service or component test.
 let fixture, failure, current = "setup";
-const evidenceDirectory = resolve(process.cwd(), "_docs/evidence/together-tonight-73");
-const retainEvidence = process.env.WATCHNEXT_CAPTURE_73_EVIDENCE === "1";
+const sourcePortCapture = process.env.WATCHNEXT_CAPTURE_75_EVIDENCE === "1";
+const evidenceRelative = sourcePortCapture ? "_docs/evidence/source-page-port-75" : "_docs/evidence/together-tonight-73";
+const evidenceDirectory = resolve(process.cwd(), evidenceRelative);
+const retainEvidence = sourcePortCapture || process.env.WATCHNEXT_CAPTURE_73_EVIDENCE === "1";
 const expectedEvidence = [
   "sign-in-1280", "watchlist-1280", "add-1280", "search-1280", "detail-1280", "picker-input-1280", "picker-result-1280",
   "sign-in-375", "watchlist-375", "add-375", "search-375", "detail-375", "picker-input-375", "picker-result-375",
@@ -168,7 +170,7 @@ async function desktop(page, film, video) {
   await page.goto(fixture.origin + "/watchlist/add");
   await page.locator(".form-fields").first().waitFor(); await boundedSurface(page, ".page-content", "desktop add form"); await sourceAddComposition(page, 1280); await captureComposition(page, "add-1280");
   await showSearchControls(page);
-  await boundedSurface(page, ".page-content", "desktop search results"); await captureComposition(page, "search-1280");
+  await boundedSurface(page, ".page-content", "desktop search results", 1152); await captureComposition(page, "search-1280");
   await page.goto(fixture.origin + `/watchlist/${film}`); const portrait = page.locator(".detail-metadata > .title-cover"); await portrait.waitFor(); const poster = await ratio(portrait); check(poster > .62 && poster < .71, "portrait film detail cover geometry (2:3)"); await captureComposition(page, "detail-1280");
   await page.goto(fixture.origin + `/watchlist/${video}`); const preview = page.locator(".detail-metadata > .video-cover"); await preview.waitFor(); const wide = await ratio(preview); check(wide > 1.7 && wide < 1.84, "16:9 YouTube detail preview geometry");
   await page.goto(fixture.origin + "/pick"); await page.getByRole("heading", { name: "Pick for me", exact: true }).waitFor(); await boundedSurface(page, ".picker-page", "desktop picker form"); await captureComposition(page, "picker-input-1280"); await page.locator(".picker-viewers input[type=checkbox]").first().check(); await field(page, "Available time (whole minutes)").fill("25"); await field(page, "Mood").selectOption("funny"); await press(page, "Pick for me"); await page.getByText("Your suggestion is ready.", { exact: true }).waitFor(); await page.locator(".picker-page > .group-result").waitFor(); await captureComposition(page, "picker-result-1280");
@@ -221,4 +223,4 @@ try {
 } catch (error) { failure = error; }
 finally { try { await fixture?.cleanup(); } catch (error) { failure ??= error; } }
 if (failure) { console.error(`FAIL ${current}: ${safeDiagnostic(failure, fixture?.secrets ?? [], fixture?.root ?? "<none>", fixture ? [fixture.sentinelRoot] : [])}`); console.error(`Owned cleanup complete: ${fixture?.cleanupComplete ?? false}; ${retainEvidence ? "only the explicitly requested synthetic evidence captures were retained." : "no screenshots, traces, HAR or video retained."}`); process.exitCode = 1; }
-else console.log(JSON.stringify({ pass: true, widths: [1280, 375], realAuthorisedData: true, sourceReferenceShell: true, committedEvidence: retainEvidence, evidenceDirectory: retainEvidence ? "_docs/evidence/together-tonight-73" : undefined, ownedCleanup: fixture.cleanupComplete }));
+else console.log(JSON.stringify({ pass: true, widths: [1280, 375], realAuthorisedData: true, sourceReferenceShell: true, committedEvidence: retainEvidence, evidenceDirectory: retainEvidence ? evidenceRelative : undefined, ownedCleanup: fixture.cleanupComplete }));

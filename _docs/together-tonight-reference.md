@@ -1,7 +1,7 @@
 # Together Tonight visual reference
 
-WatchNext's local interface uses the public Together Tonight Watchlist project
-as a **visual reference only**. The source was supplied by the project owner
+WatchNext's local interface adapts the page structure of the public Together Tonight Watchlist project.
+The source was supplied by the project owner
 and inspected from the read-only local checkout at
 `M:/webf2/WatchNextAgent/frontend-reference`, commit
 [`1e4afe7`](https://github.com/xiaodlb/together-tonight-watchlist/tree/1e4afe7edfeccc4b56dc56f192a0b8d9ca937edb).
@@ -14,12 +14,12 @@ and inspected from the read-only local checkout at
 | `src/components/ui-kit.tsx` | compact WatchNext brand/header, card/cover/avatar vocabulary and desktop/mobile navigation in `app/layout.tsx` and `app/components/navigation.tsx` |
 | `src/routes/index.tsx` | centred account-entry card and account-choice tabs on `/`, `/register` and recovery routes |
 | `src/routes/watchlist.tsx` | shared-list heading, Add action, All/Added by me control, content-type chips, responsive cover grid and contributor treatment on `/watchlist` |
-| `src/routes/add.tsx` and `src/routes/search.tsx` | narrow add/search column, grouped form/search cards and review-before-save presentation on `/watchlist/add` |
+| `src/routes/add.tsx` and `src/routes/search.tsx` | separate compact search and manual-entry cards, four type tiles, and a wide search-results composition with query input, source chips and preview cards on `/watchlist/add` |
 | `src/routes/title.$id.tsx` | cover-led title detail on `/watchlist/[id]`; films/series retain portrait covers and YouTube entries retain a 16:9 preview |
 | `src/routes/pick.tsx` | bounded picker form and result-card composition on `/pick` |
 
-The source's gradient cover fallback and simple geometric icon treatment are
-recreated in local CSS. WatchNext does not copy its bundled runtime, mock
+The source's varied gradient cover fallback with title text and simple geometric icon treatment are
+recreated in local components and CSS. WatchNext does not copy its bundled runtime, mock
 store, fixture titles, mock account handling, recovery code, telemetry or
 client-side mutations.
 
@@ -34,6 +34,7 @@ replace an existing real action with a mock control.
 
 ## Verification boundary
 
+The issue #75 production screenshots are in [source-page-port-75](evidence/source-page-port-75/README.md).
 The intended viewport checks are 1280px desktop and 375px mobile. The mobile
 layout uses the reference-style Watchlist/Add/Pick bottom navigation with safe
 content padding; desktop retains the compact header and all additional

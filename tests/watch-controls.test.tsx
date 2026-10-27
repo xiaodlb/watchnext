@@ -32,7 +32,7 @@ it("preserves oversized history with warning, and unavailable runtime allows onl
 });
 it("profile navigation/read-only history and type/archive boundaries stay real", () => {
   const action = async (): Promise<WatchState> => ({ kind: "idle" }); const view = render(<DetailView detail={{ ...detail, activeMemberId: null }} watchAction={action} episodeAction={async () => ({ kind: "idle" })} />);
-  expect(screen.getByRole("link", { name: "Choose profile" }).getAttribute("href")).toBe("/group"); expect(screen.getByText("Member history")).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Choose profile" }).getAttribute("href")).toBe("/group"); expect(screen.getByText("From the group")).toBeTruthy();
   view.rerender(<DetailView detail={{ ...detail, archived: true }} watchAction={action} />); expect(screen.queryByText("Save timestamp")).toBeNull();
   for (const contentType of ["series", "anime"]) { view.rerender(<DetailView detail={{ ...detail, contentType, numberingStyle: "continuous" }} watchAction={action} episodeAction={async () => ({ kind: "idle" })} />); expect(screen.queryByText("Your watch progress")).toBeNull(); expect(screen.getByText("Your episode progress")).toBeTruthy(); }
   view.rerender(<DetailView detail={{ ...detail, title: null, contentType: null, durationSeconds: null }} watchAction={action} />); expect(screen.getByText("Clear timestamp")).toBeTruthy();
