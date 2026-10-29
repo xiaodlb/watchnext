@@ -412,4 +412,3 @@ ALTER TABLE "metadata_reviews" ADD CONSTRAINT "metadata_reviews_member_id_group_
 
 -- AddForeignKey
 ALTER TABLE "pending_group_invitations" ADD CONSTRAINT "pending_group_invitations_invitation_id_fkey" FOREIGN KEY ("invitation_id") REFERENCES "invitations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
