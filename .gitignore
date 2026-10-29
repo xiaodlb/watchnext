@@ -15,5 +15,6 @@ coverage/
 *.backup
 *.bak
 *.log
+generated/postgres-client/
 **/.watchnext-demo-owner.json
 **/.watchnext-demo-test-owner.json

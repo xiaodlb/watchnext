@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import type { Account, AccountMembership, AccountSession, Group, GroupSession, Invitation, Member, Prisma } from "@prisma/client";
 import { AuthError, checkPassword, makePassword, passwordInput, security, usernameInput } from "../accounts/security";
-import { prismaIdentityClient, verifyPrismaIdentitySQLiteAdapter } from "./identity-store";
+import { prismaIdentityClient, prismaProvider, verifyPrismaIdentityAdapter } from "./identity-store";
 import type { IdentityGroupOperation } from "../repositories/contracts";
 
 type AccountSessionWithAccount = AccountSession & { account: Account };
@@ -82,15 +82,19 @@ async function activeAccountGroup(request: Request) {
 function invitationUrl(raw: string) { return `${origin()}/invite/${raw}`; }
 
 /**
- * Every durable mutation uses the same Prisma interactive SQLite transaction.
- * The PRAGMAs execute on the transaction connection (not on a separate probe),
+ * Every durable mutation uses the same Prisma interactive transaction.
+ * Provider-specific connection settings run on the transaction connection,
  * and conditional updates make stale/replayed writes deterministic.
  */
 async function writeTransaction<T>(operation: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return prismaIdentityClient().$transaction(async (tx) => {
-    await tx.$queryRawUnsafe("PRAGMA foreign_keys=ON");
-    await tx.$queryRawUnsafe("PRAGMA busy_timeout=5000");
-    await tx.$queryRawUnsafe("PRAGMA secure_delete=ON");
+    if (prismaProvider() === "sqlite") {
+      await tx.$queryRawUnsafe("PRAGMA foreign_keys=ON");
+      await tx.$queryRawUnsafe("PRAGMA busy_timeout=5000");
+      await tx.$queryRawUnsafe("PRAGMA secure_delete=ON");
+    } else {
+      await tx.$queryRawUnsafe("SET LOCAL lock_timeout = '5000ms'");
+    }
     return operation(tx);
   }, { maxWait: 5000, timeout: 6000 });
 }
@@ -98,7 +102,7 @@ async function writeTransaction<T>(operation: (tx: Prisma.TransactionClient) => 
 /** A real durable #49 route implementation. Library/history paths intentionally remain #50 work. */
 export async function executePrismaIdentityGroupOperation({ request, path: key }: IdentityGroupOperation): Promise<Response> {
   try {
-    verifyPrismaIdentitySQLiteAdapter();
+    verifyPrismaIdentityAdapter();
     if (request.method !== "GET") mutation(request);
     const input = request.method === "GET" ? {} : await body(request);
     const db = prismaIdentityClient();

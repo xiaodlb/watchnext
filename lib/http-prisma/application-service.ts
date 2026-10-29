@@ -8,7 +8,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { AuthError } from "../accounts/security";
 import { rankCandidates } from "../picker/ranking";
 import { PrismaLibraryError, PrismaLibraryRepository, type LibraryDraft, type PersonalPatch } from "./library-store";
-import { prismaIdentityClient, verifyPrismaIdentitySQLiteAdapter } from "./identity-store";
+import { prismaIdentityClient, verifyPrismaIdentityAdapter } from "./identity-store";
 import { handlePrismaIdentity } from "./identity-service";
 import { metadataProvidersForHttp } from "../http-memory/service";
 import { lookupMetadata } from "../metadata/lookup";
@@ -132,7 +132,7 @@ async function picker(c: Context, value: Input, next?: { id: string; step: strin
 export async function handlePrismaApplication(request: Request, path: string[]): Promise<Response> {
   const key = path.join("/");
   try {
-    verifyPrismaIdentitySQLiteAdapter();
+    verifyPrismaIdentityAdapter();
     // #49 owns all account/group/legacy state transitions.
     if (["context", "auth/register", "auth/login", "auth/logout", "auth/recovery", "groups/current", "groups", "context/group-selection", "invitations/resolve", "groups/pending/join", "context/mode", "groups/current/members/remove", "groups/current/invitations/rotate", "legacy/groups", "legacy/groups/current/profiles", "legacy/context/profile"].some(prefix => key === prefix)) return handlePrismaIdentity(request, path);
     if (request.method !== "GET") requireMutation(request);

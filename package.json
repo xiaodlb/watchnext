@@ -30,7 +30,9 @@
     "prisma:baseline:verify": "node scripts/prisma/verify-baseline.mjs",
     "prisma:identity:verify": "vitest run tests/prisma/identity-adapter.test.ts",
     "prisma:library:verify": "vitest run tests/prisma/library-adapter.test.ts",
-    "prisma:cutover:verify": "vitest run tests/prisma/cutover.test.ts && node tests/fixtures/prisma-cutover-browser-check.mjs"
+    "prisma:cutover:verify": "vitest run tests/prisma/cutover.test.ts && node tests/fixtures/prisma-cutover-browser-check.mjs",
+    "prisma:postgres:validate": "prisma validate --schema prisma/postgresql/schema.prisma",
+    "prisma:postgres:generate": "prisma generate --schema prisma/postgresql/schema.prisma"
   },
   "engines": {
     "node": ">=24.15.0 <25"

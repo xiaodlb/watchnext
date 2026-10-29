@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { PrismaClient } from "@prisma/client";
 import type { GroupContext, Identity, IdentityGroupOperation, IdentityGroupRepository } from "../repositories/contracts";
@@ -19,24 +21,42 @@ export type PrismaIdentitySnapshot = {
   invites: PrismaInvite[]; pending: PrismaPending[]; legacy: PrismaLegacy[];
 };
 
+export type PrismaProvider = "sqlite" | "postgresql";
+export function prismaProvider(): PrismaProvider {
+  const provider = process.env.WATCHNEXT_HTTP_PRISMA_PROVIDER;
+  if (!provider || provider === "sqlite") return "sqlite";
+  if (provider === "postgresql") return "postgresql";
+  throw new Error("WATCHNEXT_HTTP_PRISMA_PROVIDER must be sqlite or postgresql.");
+}
+
 const url = () => {
   const configured = process.env.WATCHNEXT_HTTP_PRISMA_DATABASE_URL;
+  if (prismaProvider() === "postgresql") {
+    if (!configured || !/^postgres(?:ql)?:\/\//i.test(configured)) throw new Error("PostgreSQL Prisma HTTP mode requires WATCHNEXT_HTTP_PRISMA_DATABASE_URL=postgresql://... .");
+    return configured;
+  }
   if (!configured || !configured.startsWith("file:")) throw new Error("Prisma HTTP mode requires a server-only WATCHNEXT_HTTP_PRISMA_DATABASE_URL=file:<absolute owned database>.");
   return configured;
 };
 
-type Cache = { url: string; client: PrismaClient };
+type Cache = { url: string; provider: PrismaProvider; client: PrismaClient };
 const globalCache = globalThis as typeof globalThis & { __watchnextPrismaIdentity?: Cache };
 export function prismaIdentityClient() {
   const databaseUrl = url();
-  if (globalCache.__watchnextPrismaIdentity?.url === databaseUrl) return globalCache.__watchnextPrismaIdentity.client;
-  const created = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
-  globalCache.__watchnextPrismaIdentity = { url: databaseUrl, client: created };
+  const provider = prismaProvider();
+  if (globalCache.__watchnextPrismaIdentity?.url === databaseUrl && globalCache.__watchnextPrismaIdentity.provider === provider) return globalCache.__watchnextPrismaIdentity.client;
+  // Keep PostgreSQL client generation separate from the existing SQLite client.
+  const Client = provider === "postgresql"
+    ? createRequire(join(process.cwd(), "package.json"))(join(process.cwd(), "generated", "postgres-client")).PrismaClient
+    : PrismaClient;
+  const created = new Client({ datasources: { db: { url: databaseUrl } } }) as PrismaClient;
+  globalCache.__watchnextPrismaIdentity = { url: databaseUrl, provider, client: created };
   return created;
 }
 
-/** Adapter-local SQLite setup/ledger check. Prisma maps rows; it does not replace native guards. */
-export function verifyPrismaIdentitySQLiteAdapter() {
+/** Retain the native ledger check for SQLite; PostgreSQL uses its own migrations. */
+export function verifyPrismaIdentityAdapter() {
+  if (prismaProvider() === "postgresql") { url(); return; }
   const databaseUrl = url();
   const filename = decodeURIComponent(databaseUrl.slice("file:".length).split("?")[0]).replace(/^\/+([A-Za-z]:)/, "$1");
   if (!filename || !/^[A-Za-z]:[\\/]|^\//.test(filename)) throw new Error("Prisma HTTP mode requires an absolute owned file path.");
@@ -47,6 +67,9 @@ export function verifyPrismaIdentitySQLiteAdapter() {
     if (rows.length !== 5 || rows.map((row) => row.version).join(",") !== "0001,0002,0003,0004,0005") throw new Error("Prisma HTTP identity database must have the immutable native migration ledger.");
   } finally { db.close(); }
 }
+
+/** Retained for existing callers of the SQLite-specific name. */
+export const verifyPrismaIdentitySQLiteAdapter = verifyPrismaIdentityAdapter;
 
 const bigint = (value: number) => BigInt(value);
 const paletteToHex: Record<string, string> = { blue: "#2563eb", purple: "#7c3aed", teal: "#0f766e", rose: "#e11d48", amber: "#d97706", slate: "#475569" };
