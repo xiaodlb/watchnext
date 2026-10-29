@@ -26,35 +26,57 @@ if (!Number.isInteger(backendPort) || backendPort < 1024 || backendPort > 65535 
   process.exit(1);
 }
 
-// Use precisely the same data file as the pre-existing app, without resetting,
-// creating, migrating, or seeding it during server startup.
-const databasePath = resolveDatabasePath(process.env, root);
-try {
-  if (!existsSync(databasePath)) throw new Error("database not found");
-  accessSync(databasePath, constants.R_OK | constants.W_OK);
-  const db = new DatabaseSync(databasePath, { readOnly: true });
+// PostgreSQL is the normal local runtime. SQLite remains available only when
+// explicitly selected; startup never creates or migrates either database.
+const provider = process.env.WATCHNEXT_HTTP_PRISMA_PROVIDER ?? "postgresql";
+let databaseUrl;
+let databasePath;
+if (provider === "postgresql") {
+  databaseUrl = process.env.WATCHNEXT_POSTGRES_URL ?? process.env.WATCHNEXT_HTTP_PRISMA_DATABASE_URL;
   try {
-    const versions = db.prepare("SELECT version FROM schema_migrations ORDER BY version").all();
-    if (versions.map((row) => row.version).join(",") !== "0001,0002,0003,0004,0005") throw new Error("database migrations are incomplete");
-  } finally { db.close(); }
-} catch (error) {
-  console.error(`WatchNext database unavailable (${error.message}). Run pnpm db:init, then pnpm dev.`);
+    if (!databaseUrl || !["postgres:", "postgresql:"].includes(new URL(databaseUrl).protocol)) throw new Error();
+  } catch {
+    console.error("Set WATCHNEXT_POSTGRES_URL to your PostgreSQL connection URL in .env.local or your shell before running pnpm dev. See _docs/postgresql-setup.md.");
+    process.exit(1);
+  }
+  if (!existsSync(join(root, "generated/postgres-client/index.js"))) {
+    console.log("Preparing the PostgreSQL Prisma client...");
+    const result = spawnSync(process.execPath, [join(root, "node_modules/prisma/build/index.js"),
+      "generate", "--schema", join(root, "prisma/postgresql/schema.prisma")], {
+      cwd: root, env: { ...process.env, WATCHNEXT_POSTGRES_URL: databaseUrl }, stdio: "inherit",
+    });
+    if (result.status !== 0) process.exit(result.status ?? 1);
+  }
+} else if (provider === "sqlite") {
+  databasePath = resolveDatabasePath(process.env, root);
+  try {
+    if (!existsSync(databasePath)) throw new Error("database not found");
+    accessSync(databasePath, constants.R_OK | constants.W_OK);
+    const db = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const versions = db.prepare("SELECT version FROM schema_migrations ORDER BY version").all();
+      if (versions.map((row) => row.version).join(",") !== "0001,0002,0003,0004,0005") throw new Error("database migrations are incomplete");
+    } finally { db.close(); }
+  } catch (error) {
+    console.error(`WatchNext SQLite database unavailable (${error.message}). Run pnpm db:init, then pnpm dev.`);
+    process.exit(1);
+  }
+  databaseUrl = pathToFileURL(databasePath).href;
+  try {
+    const localRequire = createRequire(import.meta.url);
+    const prismaRequire = createRequire(localRequire.resolve("@prisma/client"));
+    prismaRequire.resolve(".prisma/client/default");
+  } catch {
+    console.log("Preparing the SQLite Prisma client...");
+    const result = spawnSync(process.execPath, [join(root, "node_modules/prisma/build/index.js"),
+      "generate", "--schema", join(root, "prisma/schema.prisma")], {
+      cwd: root, env: { ...process.env, DATABASE_URL: databaseUrl }, stdio: "inherit",
+    });
+    if (result.status !== 0) process.exit(result.status ?? 1);
+  }
+} else {
+  console.error("WATCHNEXT_HTTP_PRISMA_PROVIDER must be postgresql or sqlite.");
   process.exit(1);
-}
-
-// A fresh pnpm install can leave the generated Prisma client absent. Generating
-// from the checked-in schema writes only node_modules; it does not migrate data.
-try {
-  const localRequire = createRequire(import.meta.url);
-  const prismaRequire = createRequire(localRequire.resolve("@prisma/client"));
-  prismaRequire.resolve(".prisma/client/default");
-} catch {
-  console.log("Preparing the Prisma client from the existing schema...");
-  const result = spawnSync(process.execPath, [join(root, "node_modules/prisma/build/index.js"),
-    "generate", "--schema", join(root, "prisma/schema.prisma")], {
-    cwd: root, env: { ...process.env, DATABASE_URL: pathToFileURL(databasePath).href }, stdio: "inherit",
-  });
-  if (result.status !== 0) process.exit(result.status ?? 1);
 }
 
 async function requireFreePort(port) {
@@ -75,10 +97,11 @@ try {
 const env = {
   ...process.env,
   WATCHNEXT_APP_ORIGIN: origin.origin,
-  WATCHNEXT_DATABASE_PATH: databasePath,
+  ...(databasePath ? { WATCHNEXT_DATABASE_PATH: databasePath } : {}),
   WATCHNEXT_HTTP_REPOSITORY: "prisma",
+  WATCHNEXT_HTTP_PRISMA_PROVIDER: provider,
   WATCHNEXT_PRIVATE_API: "1",
-  WATCHNEXT_HTTP_PRISMA_DATABASE_URL: pathToFileURL(databasePath).href,
+  WATCHNEXT_HTTP_PRISMA_DATABASE_URL: databaseUrl,
   WATCHNEXT_BACKEND_ORIGIN: `http://127.0.0.1:${backendPort}`,
 };
 const backend = spawn(process.execPath, ["--import", pathToFileURL(join(root, "scripts/framework-privacy.mjs")).href,
