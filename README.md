@@ -29,9 +29,36 @@ private API port. Provider API keys are optional; manual entries remain
 available when lookup is not configured.
 
 The default launcher is for local development. The existing `pnpm build` and
-`pnpm start` commands operate the Next API server alone; they do not build or
-start the Together Tonight frontend. A combined production launcher is not
-provided.
+`pnpm start` commands operate the Next API server alone. The Docker setup below
+builds and runs the API and Together Tonight production frontend together.
+
+## Run in Docker
+
+The image builds the frontend and the existing Node.js API. TanStack Start
+renders pages on the server, so the single container runs that production
+renderer privately while the API serves the public port and forwards page and
+asset requests to it. No Vite development server is used.
+
+From the project directory, build the image and create a persistent volume:
+
+```sh
+docker build -t watchnext .
+docker volume create watchnext-data
+docker run --rm -v watchnext-data:/data --entrypoint node watchnext scripts/db/init.mjs
+docker run --rm -p 127.0.0.1:3000:3000 -v watchnext-data:/data -e WATCHNEXT_APP_ORIGIN=http://127.0.0.1:3000 watchnext
+```
+
+Open `http://127.0.0.1:3000`. The explicit initialization command creates or
+migrates the SQLite database in the named volume without resetting existing
+records. Keep using the same volume to retain data. For a bind mount, its
+directory must be writable by the image's non-root `node` user. For deployment
+behind HTTPS, publish through a TLS reverse proxy and set `WATCHNEXT_APP_ORIGIN`
+to the exact public origin, such as `https://watch.example.com`; browser writes
+and invitation links use this value. Pass optional provider keys as runtime
+environment variables, never as build arguments or committed files.
+
+The image does not import the database from your laptop automatically. To move
+existing data, follow the SQLite-safe [backup and restore guide](_docs/backup-restore.md).
 
 ## Project documents
 
