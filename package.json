@@ -10,6 +10,7 @@
     "start": "node --import ./scripts/framework-privacy.mjs node_modules/next/dist/bin/next start --hostname 127.0.0.1",
     "test": "vitest run",
     "test:e2e": "node tests/e2e/run.mjs",
+    "test:e2e:compose": "node e2e/compose-two-sessions.mjs",
     "test:visual-reference": "node tests/fixtures/together-tonight-regression.mjs",
     "test:http-memory": "node tests/fixtures/http-memory-check.mjs",
     "verify:guide": "node tests/fixtures/local-guide-check.mjs",
