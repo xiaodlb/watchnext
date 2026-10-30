@@ -17,10 +17,12 @@ the actual invitation. It checks both group workspaces for the two independent
 members. Each user then adds a different title; both refreshed watchlists must
 show both entries and the correct contributor. Finally, both users save the
 same YouTube link and the scenario checks that it remains one shared entry with
-both contributors. Existing containers, ports, and databases are not used. Only
-resources carrying the new test project's ownership labels are removed on
-completion. No screenshots, traces, credentials or invitation links are
-retained. No live metadata provider is called.
+both contributors. The users also save different progress timestamps, ratings,
+and notes for a shared movie; after reload, each sees their own progress and the
+other member's attributed rating and note. Existing containers, ports, and
+databases are not used. Only resources carrying the new test project's
+ownership labels are removed on completion. No screenshots, traces, credentials
+or invitation links are retained. No live metadata provider is called.
 
 By default the test builds its own app image. To reuse an **already built image
 for the exact checkout under test**, set `WATCHNEXT_E2E_IMAGE` to its local image

@@ -200,12 +200,72 @@ try {
   stage = "checking one shared entry and both contributors in both sessions";
   await assertWatchlistEntry(owner, sharedTitle, [ownerName, guestName], ["You", guestName]);
   await assertWatchlistEntry(guest, sharedTitle, [ownerName, guestName], [ownerName, "You"]);
-  console.log("PASS: both accounts see each other's titles with attribution; adding the same YouTube link creates one entry with both contributors.");
+
+  stage = "adding a shared movie for personal-history checks";
+  const movieTitle = `Personal history Compose E2E movie ${suffix}`;
+  await addTitle(owner, movieTitle);
+  const moviePath = new URL(owner.url()).pathname;
+  if (!/^\/title\/[a-f0-9-]+$/.test(moviePath)) throw new Error("Could not locate the saved movie details.");
+
+  async function savePersonalHistory(page, memberName, timestamp, rating, note) {
+    await page.goto(`${origin}${moviePath}`);
+    await page.getByRole("heading", { name: movieTitle, exact: true }).waitFor();
+    const history = page.locator("section").filter({ has: page.getByRole("heading", { name: "Your progress", exact: true }) });
+    // Rating saves immediately and reloads the title; set it before entering
+    // unsaved text so the form refresh cannot clear the draft progress.
+    await history.getByRole("radio", { name: String(rating), exact: true }).click();
+    await page.getByText("Saved", { exact: true }).waitFor();
+    if (await history.getByRole("radio", { name: String(rating), exact: true }).getAttribute("aria-checked") !== "true") throw new Error(`${memberName}'s rating was not selected.`);
+    await history.getByLabel("Stopped at (H:MM:SS)").fill(timestamp);
+    await history.getByLabel(/Your note/).fill(note);
+    // Wait for the previous auto-save indicator to clear so this wait confirms
+    // the explicit Save request, not the earlier rating request.
+    await page.getByText("Saved", { exact: true }).waitFor({ state: "hidden" });
+    await history.getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByText("Saved", { exact: true }).waitFor();
+    await page.reload();
+    await page.getByRole("heading", { name: movieTitle, exact: true }).waitFor();
+    if (await history.getByLabel("Stopped at (H:MM:SS)").inputValue() !== timestamp) throw new Error(`${memberName}'s saved progress did not persist after reload.`);
+    if (await history.getByRole("radio", { name: String(rating), exact: true }).getAttribute("aria-checked") !== "true") throw new Error(`${memberName}'s saved rating did not persist after reload.`);
+    if (await history.getByLabel(/Your note/).inputValue() !== note) throw new Error(`${memberName}'s saved note did not persist after reload.`);
+  }
+
+  stage = "saving the owner's personal movie history";
+  const ownerNote = `Owner private-context note ${suffix}`;
+  await savePersonalHistory(owner, ownerName, "0:12:34", 4, ownerNote);
+  stage = "saving the guest's personal movie history";
+  const guestNote = `Guest personal-context note ${suffix}`;
+  await savePersonalHistory(guest, guestName, "0:23:45", 8, guestNote);
+
+  stage = "checking group-visible notes and private progress for the owner";
+  await owner.goto(`${origin}${moviePath}`);
+  const ownerHistory = owner.locator("section").filter({ has: owner.getByRole("heading", { name: "Your progress", exact: true }) });
+  if (await ownerHistory.getByLabel("Stopped at (H:MM:SS)").inputValue() !== "0:12:34") throw new Error("The guest's progress replaced the owner's personal progress.");
+  const ownerGroup = owner.locator("section").filter({ has: owner.getByRole("heading", { name: "From the group", exact: true }) });
+  await ownerGroup.getByText(guestName, { exact: false }).waitFor();
+  await ownerGroup.getByText("★ 8/10", { exact: true }).waitFor();
+  await ownerGroup.getByText(guestNote, { exact: true }).waitFor();
+  if (await owner.locator("body").innerText().then(text => text.includes("0:23:45"))) throw new Error("The guest's private progress appeared in the owner's view.");
+
+  stage = "checking group-visible notes and private progress for the guest";
+  await guest.goto(`${origin}${moviePath}`);
+  const guestHistory = guest.locator("section").filter({ has: guest.getByRole("heading", { name: "Your progress", exact: true }) });
+  if (await guestHistory.getByLabel("Stopped at (H:MM:SS)").inputValue() !== "0:23:45") throw new Error("The owner's progress replaced the guest's personal progress.");
+  const guestGroup = guest.locator("section").filter({ has: guest.getByRole("heading", { name: "From the group", exact: true }) });
+  await guestGroup.getByText(ownerName, { exact: false }).waitFor();
+  await guestGroup.getByText("★ 4/10", { exact: true }).waitFor();
+  await guestGroup.getByText(ownerNote, { exact: true }).waitFor();
+  if (await guest.locator("body").innerText().then(text => text.includes("0:12:34"))) throw new Error("The owner's private progress appeared in the guest's view.");
+
+  console.log("PASS: two-way title sharing and contributor attribution, duplicate YouTube link consolidation, independent personal progress, and group-visible attributed ratings and notes.");
 } catch (error) {
   failed = true;
   // Playwright errors can contain private invitation URLs or form values.
-  // Report only a bounded stage and error class, never captured page/log data.
-  console.error(`FAIL: ${stage} (${error instanceof Error ? error.name : "Error"}).`);
+  // Report a bounded diagnostic after removing URLs; never dump page/log data.
+  const detail = error instanceof Error
+    ? error.message.split(/\r?\n/, 1)[0].replace(/https?:\/\/\S+/g, "[URL]").slice(0, 180)
+    : "Unexpected error.";
+  console.error(`FAIL: ${stage} (${error instanceof Error ? error.name : "Error"}): ${detail}`);
 } finally {
   await browser?.close().catch(() => { failed = true; });
   if (started) {
