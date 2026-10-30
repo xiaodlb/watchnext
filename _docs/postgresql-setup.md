@@ -8,7 +8,8 @@ ignored by Git and is generated automatically on first launch if absent.
 
 The existing SQLite database is separate and remains unchanged. To explicitly
 use SQLite locally, set `WATCHNEXT_HTTP_PRISMA_PROVIDER=sqlite` before `pnpm dev`.
-The Docker launcher is unchanged and still selects SQLite.
+The Docker launcher also defaults to PostgreSQL, using a runtime-provided URL;
+see the [Docker instructions](../README.md#run-in-docker).
 
 You can validate and generate the PostgreSQL client without connecting to the
 database:
@@ -39,6 +40,5 @@ Never commit the actual connection string or credentials.
 
 The initial migration was applied to the separate local PostgreSQL database,
 and a two-session account/group/watchlist journey was performed against it.
-PostgreSQL and SQLite do not share data. Migrations remain explicit: `pnpm dev`
-does not apply them. The Docker production launcher has not been switched to
-PostgreSQL.
+PostgreSQL and SQLite do not share data. Migrations remain explicit: neither
+`pnpm dev` nor the Docker launcher applies them automatically.

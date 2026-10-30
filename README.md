@@ -33,9 +33,8 @@ available when lookup is not configured.
 
 The default launcher is for local development. The existing `pnpm build` and
 `pnpm start` commands operate the Next API server alone. The Docker setup below
-builds and runs the API and Together Tonight production frontend together. The
-Docker launcher still uses SQLite; local PostgreSQL configuration does not
-change the Docker setup.
+builds and runs the API and Together Tonight production frontend together,
+using PostgreSQL by default.
 
 ## Run in Docker
 
@@ -44,26 +43,45 @@ renders pages on the server, so the single container runs that production
 renderer privately while the API serves the public port and forwards page and
 asset requests to it. No Vite development server is used.
 
-From the project directory, build the image and create a persistent volume:
+The PostgreSQL server and its migrated database must already exist. To use the
+existing local `watchnext-postgres` container, connect it once to a dedicated
+Docker network. This leaves its existing `watchnext-postgres-data` volume and
+published local port untouched:
 
-```sh
-docker build -t watchnext .
-docker volume create watchnext-data
-docker run --rm -v watchnext-data:/data --entrypoint node watchnext scripts/db/init.mjs
-docker run --rm -p 127.0.0.1:3000:3000 -v watchnext-data:/data -e WATCHNEXT_APP_ORIGIN=http://127.0.0.1:3000 watchnext
+```powershell
+docker network create watchnext-network
+docker network connect watchnext-network watchnext-postgres
 ```
 
-Open `http://127.0.0.1:3000`. The explicit initialization command creates or
-migrates the SQLite database in the named volume without resetting existing
-records. Keep using the same volume to retain data. For a bind mount, its
-directory must be writable by the image's non-root `node` user. For deployment
-behind HTTPS, publish through a TLS reverse proxy and set `WATCHNEXT_APP_ORIGIN`
-to the exact public origin, such as `https://watch.example.com`; browser writes
-and invitation links use this value. Pass optional provider keys as runtime
-environment variables, never as build arguments or committed files.
+From the project directory, build the image and supply the PostgreSQL URL at
+runtime. Replace `USER`, `PASSWORD`, and `DATABASE` with the credentials and
+database already configured for your PostgreSQL container. The hostname is the
+Docker container name, not `127.0.0.1` (which refers to the app container).
+Do not commit your actual credentials.
 
-The image does not import the database from your laptop automatically. To move
-existing data, follow the SQLite-safe [backup and restore guide](_docs/backup-restore.md).
+```powershell
+docker build -t watchnext .
+$env:WATCHNEXT_POSTGRES_URL='postgresql://USER:PASSWORD@watchnext-postgres:5432/DATABASE?schema=public'
+docker run --rm --name watchnext-app --network watchnext-network -p 127.0.0.1:3000:3000 -e WATCHNEXT_POSTGRES_URL -e WATCHNEXT_APP_ORIGIN=http://127.0.0.1:3000 watchnext
+```
+
+Open `http://127.0.0.1:3000` and keep the terminal open. If the local `pnpm dev`
+server is already using port 3000, stop it first. PostgreSQL data stays in its
+own named volume when the app container stops. Docker startup does not create,
+migrate, reset, or copy the database: apply migrations deliberately as described
+in [PostgreSQL setup](_docs/postgresql-setup.md).
+
+For deployment behind HTTPS, publish through a TLS reverse proxy and set
+`WATCHNEXT_APP_ORIGIN` to the exact public origin, such as
+`https://watch.example.com`; browser writes and invitation links use this value.
+Pass optional provider keys as runtime environment variables, never as build
+arguments or committed files. The example PostgreSQL credentials are for local
+development; use separate secure credentials and backups in production.
+
+For the existing SQLite Docker volume, explicitly set
+`WATCHNEXT_HTTP_PRISMA_PROVIDER=sqlite`, mount `watchnext-data:/data`, and
+initialize that separate database with `scripts/db/init.mjs` if needed. Switching
+providers does not transfer records between SQLite and PostgreSQL.
 
 ## Project documents
 

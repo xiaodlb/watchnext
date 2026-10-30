@@ -17,6 +17,7 @@ COPY . .
 
 # Generate a Linux Prisma engine; migrations remain an explicit runtime step.
 RUN DATABASE_URL=file:/tmp/watchnext-build.sqlite pnpm exec prisma generate
+RUN WATCHNEXT_POSTGRES_URL=postgresql://localhost:5432/build pnpm exec prisma generate --schema prisma/postgresql/schema.prisma
 RUN WATCHNEXT_PRIVATE_API=1 WATCHNEXT_CONTAINER_MODE=1 pnpm build
 WORKDIR /app/lovable-frontend
 RUN NITRO_PRESET=node-server node node_modules/vite/bin/vite.js build
@@ -28,6 +29,7 @@ ENV NODE_ENV=production \
     WATCHNEXT_PRIVATE_API=1 \
     WATCHNEXT_CONTAINER_MODE=1 \
     WATCHNEXT_HTTP_REPOSITORY=prisma \
+    WATCHNEXT_HTTP_PRISMA_PROVIDER=postgresql \
     WATCHNEXT_DATABASE_PATH=/data/watchnext.sqlite \
     WATCHNEXT_APP_ORIGIN=http://127.0.0.1:3000
 COPY --from=build --chown=node:node /app /app

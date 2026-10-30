@@ -1,6 +1,7 @@
 .git
 **/.git
 **/node_modules
+generated
 **/.next
 **/.next-api
 **/.output

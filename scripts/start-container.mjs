@@ -6,24 +6,39 @@ import { DatabaseSync } from "node:sqlite";
 import { resolveDatabasePath } from "../db/config.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const database = resolveDatabasePath(process.env, root);
+const provider = process.env.WATCHNEXT_HTTP_PRISMA_PROVIDER ?? "postgresql";
 const configuredOrigin = process.env.WATCHNEXT_APP_ORIGIN ?? "http://127.0.0.1:3000";
 const publicPort = Number(process.env.PORT ?? "3000");
+let databaseUrl;
 try {
   if (!Number.isInteger(publicPort) || publicPort < 1 || publicPort > 65535 || publicPort === 3101) throw new Error("PORT must be a valid port other than 3101.");
   const origin = new URL(configuredOrigin);
   if (!["http:", "https:"].includes(origin.protocol) || origin.origin !== configuredOrigin || origin.username || origin.password) {
     throw new Error("WATCHNEXT_APP_ORIGIN must be the exact public HTTP or HTTPS origin, without a path or trailing slash.");
   }
-  if (!existsSync(database)) throw new Error("Database not initialized. Run scripts/db/init.mjs with the same /data volume first.");
-  accessSync(database, constants.R_OK | constants.W_OK);
-  const db = new DatabaseSync(database, { readOnly: true });
-  try {
-    const versions = db.prepare("SELECT version FROM schema_migrations ORDER BY version").all();
-    if (versions.map(row => row.version).join(",") !== "0001,0002,0003,0004,0005") {
-      throw new Error("Database migrations are incomplete. Run scripts/db/init.mjs with the same /data volume first.");
+  if (provider === "postgresql") {
+    databaseUrl = process.env.WATCHNEXT_POSTGRES_URL ?? process.env.WATCHNEXT_HTTP_PRISMA_DATABASE_URL;
+    let parsed;
+    try { parsed = new URL(databaseUrl); } catch { throw new Error("Set WATCHNEXT_POSTGRES_URL to a valid PostgreSQL connection URL."); }
+    if (!["postgres:", "postgresql:"].includes(parsed.protocol) || !parsed.hostname || parsed.pathname === "/") {
+      throw new Error("Set WATCHNEXT_POSTGRES_URL to a valid PostgreSQL connection URL.");
     }
-  } finally { db.close(); }
+    if (!existsSync(resolve(root, "generated/postgres-client/index.js"))) throw new Error("PostgreSQL Prisma client is missing from the image.");
+  } else if (provider === "sqlite") {
+    const database = resolveDatabasePath(process.env, root);
+    if (!existsSync(database)) throw new Error("SQLite database not initialized. Run scripts/db/init.mjs with the same /data volume first.");
+    accessSync(database, constants.R_OK | constants.W_OK);
+    const db = new DatabaseSync(database, { readOnly: true });
+    try {
+      const versions = db.prepare("SELECT version FROM schema_migrations ORDER BY version").all();
+      if (versions.map(row => row.version).join(",") !== "0001,0002,0003,0004,0005") {
+        throw new Error("SQLite migrations are incomplete. Run scripts/db/init.mjs with the same /data volume first.");
+      }
+    } finally { db.close(); }
+    databaseUrl = pathToFileURL(database).href;
+  } else {
+    throw new Error("WATCHNEXT_HTTP_PRISMA_PROVIDER must be postgresql or sqlite.");
+  }
 } catch (error) {
   console.error(`Cannot start WatchNext: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
@@ -32,7 +47,8 @@ try {
 const common = {
   ...process.env,
   WATCHNEXT_HTTP_REPOSITORY: "prisma",
-  WATCHNEXT_HTTP_PRISMA_DATABASE_URL: pathToFileURL(database).href,
+  WATCHNEXT_HTTP_PRISMA_PROVIDER: provider,
+  WATCHNEXT_HTTP_PRISMA_DATABASE_URL: databaseUrl,
   WATCHNEXT_APP_ORIGIN: configuredOrigin,
 };
 const frontend = spawn(process.execPath, ["lovable-frontend/.output/server/index.mjs"], {
