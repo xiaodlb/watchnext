@@ -43,6 +43,39 @@ renders pages on the server, so the single container runs that production
 renderer privately while the API serves the public port and forwards page and
 asset requests to it. No Vite development server is used.
 
+### Run the whole application with Docker Compose
+
+With Docker Desktop running, from the project directory run:
+
+```powershell
+docker compose up --build
+```
+
+Open **http://localhost:8100**. Compose starts PostgreSQL and waits for it to
+accept connections before starting WatchNext. WatchNext applies any pending
+PostgreSQL migrations on startup without resetting the database. Press Ctrl+C
+to stop both services; `docker compose up` starts them again. Data stays in the
+Compose `postgres-data` named volume between runs.
+
+This is a **separate, initially empty database** from the earlier standalone
+`watchnext-postgres` container and its `watchnext-postgres-data` volume. It does
+not import or overwrite those accounts or films. Do not start a second
+PostgreSQL container on the same data directory. `docker compose down` stops
+and removes the Compose containers and network but keeps the data volume; do
+not add `--volumes` unless you intend to permanently delete that database.
+
+The included username and password are local-development defaults only. To
+change them for a new database, set `WATCHNEXT_COMPOSE_DB_USER`,
+`WATCHNEXT_COMPOSE_DB_PASSWORD`, and `WATCHNEXT_COMPOSE_DB_NAME` in your shell
+or ignored `.env` file before first startup. Changing them later does not alter
+the credentials or database in an existing PostgreSQL volume; create database
+credentials separately when needed. `WATCHNEXT_COMPOSE_PORT` changes the host
+port and the corresponding origin together. For a public deployment, choose
+strong credentials, configure backups and an HTTPS reverse proxy, and adapt
+the public origin; the loopback-only Compose settings are for local use.
+
+### Run using the existing standalone PostgreSQL container
+
 The PostgreSQL server and its migrated database must already exist. To use the
 existing local `watchnext-postgres` container, connect it once to a dedicated
 Docker network. This leaves its existing `watchnext-postgres-data` volume and

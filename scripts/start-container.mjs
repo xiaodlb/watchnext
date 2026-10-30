@@ -1,5 +1,5 @@
 import { accessSync, constants, existsSync } from "node:fs";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
@@ -18,6 +18,15 @@ try {
   }
   if (provider === "postgresql") {
     databaseUrl = process.env.WATCHNEXT_POSTGRES_URL ?? process.env.WATCHNEXT_HTTP_PRISMA_DATABASE_URL;
+    // Compose passes discrete credentials rather than interpolating a URL so
+    // special characters in the username, password and database are encoded.
+    if (!databaseUrl && process.env.WATCHNEXT_COMPOSE_DB_HOST) {
+      const host = process.env.WATCHNEXT_COMPOSE_DB_HOST;
+      const user = encodeURIComponent(process.env.WATCHNEXT_COMPOSE_DB_USER ?? "");
+      const password = encodeURIComponent(process.env.WATCHNEXT_COMPOSE_DB_PASSWORD ?? "");
+      const name = encodeURIComponent(process.env.WATCHNEXT_COMPOSE_DB_NAME ?? "");
+      databaseUrl = `postgresql://${user}:${password}@${host}:5432/${name}?schema=public`;
+    }
     let parsed;
     try { parsed = new URL(databaseUrl); } catch { throw new Error("Set WATCHNEXT_POSTGRES_URL to a valid PostgreSQL connection URL."); }
     if (!["postgres:", "postgresql:"].includes(parsed.protocol) || !parsed.hostname || parsed.pathname === "/") {
@@ -42,6 +51,20 @@ try {
 } catch (error) {
   console.error(`Cannot start WatchNext: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
+}
+
+// Automatic deployment is explicitly enabled by Compose for its own database.
+// Deploy applies pending migrations and does not reset or copy existing data.
+if (provider === "postgresql" && process.env.WATCHNEXT_APPLY_MIGRATIONS === "1") {
+  const migration = spawnSync(process.execPath, ["node_modules/prisma/build/index.js", "migrate", "deploy", "--schema", "prisma/postgresql/schema.prisma"], {
+    cwd: root,
+    env: { ...process.env, WATCHNEXT_POSTGRES_URL: databaseUrl },
+    stdio: "inherit",
+  });
+  if (migration.error || migration.status !== 0) {
+    console.error("PostgreSQL migration failed. The application was not started.");
+    process.exit(migration.status ?? 1);
+  }
 }
 
 const common = {

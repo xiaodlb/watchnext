@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${WATCHNEXT_COMPOSE_DB_USER:-watchnext}
+      POSTGRES_PASSWORD: ${WATCHNEXT_COMPOSE_DB_PASSWORD:-watchnext-local}
+      POSTGRES_DB: ${WATCHNEXT_COMPOSE_DB_NAME:-watchnext}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      WATCHNEXT_COMPOSE_DB_HOST: postgres
+      WATCHNEXT_COMPOSE_DB_USER: ${WATCHNEXT_COMPOSE_DB_USER:-watchnext}
+      WATCHNEXT_COMPOSE_DB_PASSWORD: ${WATCHNEXT_COMPOSE_DB_PASSWORD:-watchnext-local}
+      WATCHNEXT_COMPOSE_DB_NAME: ${WATCHNEXT_COMPOSE_DB_NAME:-watchnext}
+      WATCHNEXT_APPLY_MIGRATIONS: "1"
+      WATCHNEXT_APP_ORIGIN: http://localhost:${WATCHNEXT_COMPOSE_PORT:-8100}
+      YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
+      KINOPOISK_UNOFFICIAL_API_KEY: ${KINOPOISK_UNOFFICIAL_API_KEY:-}
+    ports:
+      - "127.0.0.1:${WATCHNEXT_COMPOSE_PORT:-8100}:3000"
+
+volumes:
+  postgres-data:
