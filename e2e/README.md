@@ -14,11 +14,13 @@ isolated Compose project on a free loopback port, and exercises the real app
 with two separate browser contexts and a fresh PostgreSQL volume. It registers
 both accounts, signs each out and back in, creates a group and joins it using
 the actual invitation. It checks both group workspaces for the two independent
-members, then adds a title as the second account and checks that the owner sees
-it after refreshing the watchlist. Existing containers, ports, and databases are
-not used. Only resources carrying the new test project's ownership labels are
-removed on completion. No screenshots, traces, credentials or invitation
-links are retained. No live metadata provider is called.
+members. Each user then adds a different title; both refreshed watchlists must
+show both entries and the correct contributor. Finally, both users save the
+same YouTube link and the scenario checks that it remains one shared entry with
+both contributors. Existing containers, ports, and databases are not used. Only
+resources carrying the new test project's ownership labels are removed on
+completion. No screenshots, traces, credentials or invitation links are
+retained. No live metadata provider is called.
 
 By default the test builds its own app image. To reuse an **already built image
 for the exact checkout under test**, set `WATCHNEXT_E2E_IMAGE` to its local image

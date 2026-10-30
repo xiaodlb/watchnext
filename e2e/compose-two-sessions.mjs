@@ -73,8 +73,39 @@ async function register(page, username, loginAfter) {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("heading", { name: "Your groups" }).waitFor();
 }
+async function addTitle(page, title, { youtube = false, confirmDuplicate = false } = {}) {
+  await page.goto(`${origin}/add`);
+  if (youtube) await page.getByRole("button", { name: "YouTube video", exact: true }).click();
+  if (youtube) await page.getByLabel("Watch link", { exact: false }).fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  await page.getByLabel("Title", { exact: true }).fill(title);
+  await page.getByLabel("Runtime (min)", { exact: true }).fill("25");
+  await page.getByRole("button", { name: "Funny", exact: true }).click();
+  if (confirmDuplicate) page.once("dialog", dialog => { void dialog.accept(); });
+  await page.getByRole("button", { name: "Save to list", exact: true }).click();
+  await page.getByRole("heading", { name: title, exact: true }).waitFor();
+}
+async function assertWatchlistEntry(page, title, contributors, visibleNames) {
+  await page.goto(`${origin}/watchlist`);
+  await page.getByRole("heading", { name: groupName }).waitFor();
+  const entry = page.getByRole("link", { name: new RegExp(title) });
+  stage = "waiting for the saved watchlist title";
+  await entry.first().waitFor();
+  stage = "checking that the title appears once";
+  const cards = page.getByRole("listitem").filter({ hasText: title });
+  const cardCount = await cards.count();
+  if (cardCount !== 1) { stage = `checking that the title appears once (${cardCount} matching cards)`; throw new Error("Watchlist entry count did not match."); }
+  const attribution = cards.locator('[aria-label^="Added by "]');
+  stage = "checking contributor attribution";
+  await attribution.waitFor();
+  if (await attribution.getAttribute("aria-label") !== `Added by ${contributors.join(", ")}`) {
+    throw new Error("Contributor attribution did not match.");
+  }
+  stage = "checking visible contributor names";
+  const text = (await attribution.innerText()).replace(/\s+/g, " ").trim();
+  if (!visibleNames.every(name => text.includes(name))) throw new Error("Visible contributor names did not match.");
+}
 
-let origin = "";
+let origin = "", groupName = "";
 let failed = false;
 try {
   assertOwnedTemp();
@@ -119,10 +150,11 @@ try {
   }
   const owner = await ownerContext.newPage(), guest = await guestContext.newPage();
   const suffix = randomBytes(5).toString("hex");
+  groupName = `E2E group ${suffix}`;
   stage = "registering and signing in the owner";
   await register(owner, `owner_${suffix}`, true);
   stage = "creating the shared group and invitation";
-  await owner.getByLabel("Group name", { exact: true }).fill(`E2E group ${suffix}`);
+  await owner.getByLabel("Group name", { exact: true }).fill(groupName);
   await owner.getByRole("button", { name: "Create group", exact: true }).click();
   const inviteSection = owner.locator("section").filter({ has: owner.getByRole("heading", { name: "Invite your group" }) });
   await inviteSection.getByRole("heading", { name: "Invite your group" }).waitFor();
@@ -130,14 +162,14 @@ try {
   const inviteUrl = new URL(invite);
   if (inviteUrl.origin !== origin || !inviteUrl.pathname.startsWith("/invite/")) throw new Error("Invitation does not target the test server.");
   await inviteSection.getByRole("button", { name: "Open watchlist" }).click();
-  await owner.getByRole("heading", { name: `E2E group ${suffix}` }).waitFor();
+  await owner.getByRole("heading", { name: groupName }).waitFor();
   stage = "registering and signing in the second account";
   await register(guest, `guest_${suffix}`, true);
   stage = "joining the shared group from the second session";
   await guest.goto(invite);
   await guest.getByRole("button", { name: "Open invitation" }).click();
   await guest.getByRole("button", { name: "Join group" }).click();
-  await guest.getByRole("heading", { name: `E2E group ${suffix}` }).waitFor();
+  await guest.getByRole("heading", { name: groupName }).waitFor();
   stage = "checking group membership in both independent sessions";
   for (const [page, own, other] of [[owner, `owner_${suffix}`, `guest_${suffix}`], [guest, `guest_${suffix}`, `owner_${suffix}`]]) {
     await page.goto(`${origin}/groups`);
@@ -147,19 +179,28 @@ try {
     await members.getByRole("listitem").filter({ hasText: other }).waitFor();
   }
   stage = "adding a title as the second account";
-  const title = `Compose E2E film ${suffix}`;
+  const title = `Guest Compose E2E film ${suffix}`;
   await guest.goto(`${origin}/add`);
-  await guest.getByLabel("Title", { exact: true }).fill(title);
-  await guest.getByLabel("Runtime (min)", { exact: true }).fill("25");
-  await guest.getByRole("button", { name: "Funny", exact: true }).click();
-  await guest.getByRole("button", { name: "Save to list", exact: true }).click();
-  await guest.getByRole("heading", { name: title, exact: true }).waitFor();
-  stage = "checking the owner's refreshed watchlist";
-  await owner.goto(`${origin}/watchlist`);
-  await owner.getByRole("heading", { name: `E2E group ${suffix}` }).waitFor();
-  await owner.reload();
-  await owner.getByRole("link", { name: new RegExp(title) }).waitFor();
-  console.log("PASS: both accounts signed out and back in; the invited member appears in both workspaces, and the owner saw the guest's title after refreshing.");
+  await addTitle(guest, title);
+  const ownerName = `owner_${suffix}`, guestName = `guest_${suffix}`;
+  stage = "adding a different title as the owner";
+  const ownerTitle = `Owner Compose E2E film ${suffix}`;
+  await addTitle(owner, ownerTitle);
+  for (const [page, ownTitle, otherTitle] of [[owner, ownerTitle, title], [guest, title, ownerTitle]]) {
+    stage = page === owner ? "checking the owner's title attribution" : "checking the guest's title attribution";
+    await assertWatchlistEntry(page, ownTitle, [page === owner ? ownerName : guestName], ["You"]);
+    stage = page === owner ? "checking the guest title attribution in the owner's watchlist" : "checking the owner title attribution in the guest's watchlist";
+    await assertWatchlistEntry(page, otherTitle, [page === owner ? guestName : ownerName], [page === owner ? guestName : ownerName]);
+  }
+  stage = "adding the same linked title as the owner";
+  const sharedTitle = `Shared linked Compose E2E video ${suffix}`;
+  await addTitle(owner, sharedTitle, { youtube: true });
+  stage = "adding the same linked title from the guest account";
+  await addTitle(guest, sharedTitle, { youtube: true, confirmDuplicate: true });
+  stage = "checking one shared entry and both contributors in both sessions";
+  await assertWatchlistEntry(owner, sharedTitle, [ownerName, guestName], ["You", guestName]);
+  await assertWatchlistEntry(guest, sharedTitle, [ownerName, guestName], [ownerName, "You"]);
+  console.log("PASS: both accounts see each other's titles with attribution; adding the same YouTube link creates one entry with both contributors.");
 } catch (error) {
   failed = true;
   // Playwright errors can contain private invitation URLs or form values.
