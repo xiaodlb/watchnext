@@ -131,12 +131,21 @@ try {
   if (inviteUrl.origin !== origin || !inviteUrl.pathname.startsWith("/invite/")) throw new Error("Invitation does not target the test server.");
   await inviteSection.getByRole("button", { name: "Open watchlist" }).click();
   await owner.getByRole("heading", { name: `E2E group ${suffix}` }).waitFor();
-  stage = "registering and joining the second account";
-  await register(guest, `guest_${suffix}`, false);
+  stage = "registering and signing in the second account";
+  await register(guest, `guest_${suffix}`, true);
+  stage = "joining the shared group from the second session";
   await guest.goto(invite);
   await guest.getByRole("button", { name: "Open invitation" }).click();
   await guest.getByRole("button", { name: "Join group" }).click();
   await guest.getByRole("heading", { name: `E2E group ${suffix}` }).waitFor();
+  stage = "checking group membership in both independent sessions";
+  for (const [page, own, other] of [[owner, `owner_${suffix}`, `guest_${suffix}`], [guest, `guest_${suffix}`, `owner_${suffix}`]]) {
+    await page.goto(`${origin}/groups`);
+    const members = page.locator("section").filter({ has: page.getByRole("heading", { name: `Members of E2E group ${suffix}`, exact: true }) });
+    await members.getByRole("heading", { name: `Members of E2E group ${suffix}`, exact: true }).waitFor();
+    await members.getByRole("listitem").filter({ hasText: `${own} · You` }).waitFor();
+    await members.getByRole("listitem").filter({ hasText: other }).waitFor();
+  }
   stage = "adding a title as the second account";
   const title = `Compose E2E film ${suffix}`;
   await guest.goto(`${origin}/add`);
@@ -146,9 +155,11 @@ try {
   await guest.getByRole("button", { name: "Save to list", exact: true }).click();
   await guest.getByRole("heading", { name: title, exact: true }).waitFor();
   stage = "checking the owner's refreshed watchlist";
+  await owner.goto(`${origin}/watchlist`);
+  await owner.getByRole("heading", { name: `E2E group ${suffix}` }).waitFor();
   await owner.reload();
   await owner.getByRole("link", { name: new RegExp(title) }).waitFor();
-  console.log("PASS: two independent accounts shared a group; the owner saw the guest's title after refreshing.");
+  console.log("PASS: both accounts signed out and back in; the invited member appears in both workspaces, and the owner saw the guest's title after refreshing.");
 } catch (error) {
   failed = true;
   // Playwright errors can contain private invitation URLs or form values.

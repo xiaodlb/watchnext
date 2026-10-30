@@ -12,9 +12,10 @@ pnpm test:e2e:compose
 The command builds the current checkout using `docker-compose.yaml`, starts an
 isolated Compose project on a free loopback port, and exercises the real app
 with two separate browser contexts and a fresh PostgreSQL volume. It registers
-and signs in a group owner, shares the actual invitation, joins as a second
-account, adds a title as the second account, and checks that the owner sees it
-after refreshing the watchlist. Existing containers, ports, and databases are
+both accounts, signs each out and back in, creates a group and joins it using
+the actual invitation. It checks both group workspaces for the two independent
+members, then adds a title as the second account and checks that the owner sees
+it after refreshing the watchlist. Existing containers, ports, and databases are
 not used. Only resources carrying the new test project's ownership labels are
 removed on completion. No screenshots, traces, credentials or invitation
 links are retained. No live metadata provider is called.
