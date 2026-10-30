@@ -113,10 +113,13 @@ async function pick(page, { viewers, minutes, mood }) {
   await page.getByRole("button", { name: "Pick something", exact: true }).click();
   stage = "waiting for picker result";
   const result = page.locator('[aria-live="polite"] section');
-  try { await result.waitFor(); }
-  catch {
-    const alert = (await page.getByRole("alert").allTextContents()).join(" ").replace(/\s+/g, " ").slice(0, 160);
-    throw new Error(`Picker result did not render${alert ? ` (${alert})` : ""}.`);
+  const requestError = page.getByRole("alert").filter({ hasText: "The request could not be completed." });
+  const outcome = await Promise.race([
+    result.waitFor().then(() => "recommendation"),
+    requestError.waitFor().then(() => "request error"),
+  ]);
+  if (outcome === "request error" || await requestError.isVisible()) {
+    throw new Error("Picker showed the request-error alert instead of a recommendation.");
   }
   return result;
 }
