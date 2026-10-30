@@ -55,3 +55,24 @@ As with the two-session command, `WATCHNEXT_E2E_IMAGE` optionally chooses an
 existing local image and skips the build. Use this only when the image matches
 the checkout; the caller is responsible for that match. Docker and the pinned
 Playwright Chromium must be available.
+
+## PostgreSQL persistence after restart
+
+```sh
+pnpm test:e2e:compose:restart
+```
+
+This starts the real application and PostgreSQL in a fresh uniquely named
+Compose project, creates two accounts, a group, and a shared title, then signs
+out both accounts. It runs `docker compose down` without `--volumes`, verifies
+the test-owned PostgreSQL volume is still present, and starts the same project
+again. Fresh browser contexts sign in to both accounts and verify that the
+group, membership, and one shared title persisted. Cleanup removes only
+resources whose Compose ownership labels match the generated project. It never
+uses or removes the user's containers or database volumes, and it does not
+retain screenshots, traces, recovery codes, credentials, or invitation links.
+
+By default the command builds the current checkout. To skip building, set
+`WATCHNEXT_E2E_IMAGE` to a local image that contains the exact application code
+under test; the command fails if that image is missing. The restart always uses
+the same image and the same project-owned PostgreSQL volume.
