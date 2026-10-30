@@ -31,3 +31,22 @@ watchlists rather than interview sessions or a canvas. The UI currently needs
 a refresh to see another session's new title; this test does not claim realtime
 updates. Docker needs sufficient disk space, and Chromium must already be
 installed. A missing dependency or a failed assertion exits non-zero.
+
+## Compose readiness
+
+```sh
+pnpm test:e2e:readiness
+```
+
+This separate check builds the current checkout, observes PostgreSQL become
+healthy before WatchNext starts, and opens the real homepage and context API
+with Playwright. It then starts another isolated project with a test-only
+healthcheck that always fails and verifies that Compose refuses to start the
+app. Both projects use separate temporary volumes and are cleaned up only
+after their ownership is checked. Failures report the affected stage and exit
+nonzero; no private pages, credentials, or invitation links are retained.
+
+As with the two-session command, `WATCHNEXT_E2E_IMAGE` optionally chooses an
+existing local image and skips the build. Use this only when the image matches
+the checkout; the caller is responsible for that match. Docker and the pinned
+Playwright Chromium must be available.
