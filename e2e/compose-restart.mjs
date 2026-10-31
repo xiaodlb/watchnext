@@ -234,7 +234,10 @@ try {
   console.log("PASS: both accounts, group membership and the shared title persisted after Compose was taken down without removing its PostgreSQL volume and brought back up.");
 } catch (error) {
   failed = true;
-  console.error(`FAIL: ${stage} (${error instanceof Error ? error.name : "Error"}).`);
+  const detail = error instanceof Error && error.message.startsWith("Persisted group heading missing;")
+    ? ` ${error.message.replace(/https?:\/\/\S+/g, "[URL]").replace(/\s+/g, " ").slice(0, 260)}`
+    : "";
+  console.error(`FAIL: ${stage} (${error instanceof Error ? error.name : "Error"}).${detail}`);
 } finally {
   await browser?.close().catch(() => { failed = true; });
   if (started) {
