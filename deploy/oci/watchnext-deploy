@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+readonly repo_dir=/opt/watchnext
+readonly repo_url=https://github.com/xiaodlb/watchnext.git
+readonly project=watchnext
+readonly deploy_user=ubuntu
+readonly image_repository=ghcr.io/xiaodlb/watchnext
+readonly compose_dir=/var/lib/watchnext/compose
+
+tag="$(cat)"
+if [[ ! "$tag" =~ ^([0-9a-f]{40})-[0-9]+-[0-9]+$ ]]; then
+  echo 'Expected a commit SHA, GitHub run ID and attempt on standard input.' >&2
+  exit 2
+fi
+sha="${BASH_REMATCH[1]}"
+
+if [[ ! -d "$repo_dir/.git" || ! -f "$repo_dir/.env" || -L "$repo_dir/.env" ]]; then
+  echo 'Expected a Git checkout and a regular .env file in /opt/watchnext.' >&2
+  exit 1
+fi
+if [[ "$(stat -c '%U' "$repo_dir/.git")" != "$deploy_user" ]]; then
+  echo "Expected /opt/watchnext/.git to be owned by ${deploy_user}." >&2
+  exit 1
+fi
+if [[ ! -d "$compose_dir" || -L "$compose_dir" || "$(stat -c '%U' "$compose_dir")" != root ]]; then
+  echo "Expected the root-owned Compose configuration directory at ${compose_dir}." >&2
+  exit 1
+fi
+
+exec 9>/run/lock/watchnext-deploy.lock
+if ! flock -n 9; then
+  echo 'Another WatchNext deployment is already running.' >&2
+  exit 1
+fi
+
+runuser --user "$deploy_user" -- env GIT_TERMINAL_PROMPT=0 \
+  git -C "$repo_dir" fetch --quiet --no-tags "$repo_url" main
+if ! runuser --user "$deploy_user" -- git -C "$repo_dir" cat-file -e "${sha}^{commit}"; then
+  echo 'Fetched commit is unavailable in the WatchNext checkout.' >&2
+  exit 1
+fi
+
+release_dir="$(mktemp -d /tmp/watchnext-release.XXXXXX)"
+trap 'rm -rf "$release_dir"' EXIT
+runuser --user "$deploy_user" -- git -C "$repo_dir" archive --format=tar "$sha" \
+  | tar -xf - -C "$release_dir"
+
+for file in docker-compose.yaml deploy/oracle/docker-compose.yaml deploy/oracle/Caddyfile deploy/oci/compose-deploy.yaml; do
+  if [[ ! -f "$release_dir/$file" ]]; then
+    echo "Commit ${sha} is missing ${file}." >&2
+    exit 1
+  fi
+done
+
+install -o root -g root -m 0644 "$release_dir/docker-compose.yaml" "$compose_dir/docker-compose.yaml"
+install -o root -g root -m 0644 "$release_dir/deploy/oracle/docker-compose.yaml" "$compose_dir/deploy/oracle/docker-compose.yaml"
+install -o root -g root -m 0644 "$release_dir/deploy/oracle/Caddyfile" "$compose_dir/deploy/oracle/Caddyfile"
+install -o root -g root -m 0644 "$release_dir/deploy/oci/compose-deploy.yaml" "$compose_dir/deploy/oci/compose-deploy.yaml"
+
+readonly image="${image_repository}:${tag}"
+compose=(docker compose --project-name "$project" --project-directory "$compose_dir" \
+  --env-file "$repo_dir/.env" \
+  -f "$compose_dir/docker-compose.yaml" \
+  -f "$compose_dir/deploy/oracle/docker-compose.yaml" \
+  -f "$compose_dir/deploy/oci/compose-deploy.yaml")
+
+WATCHNEXT_IMAGE="$image" "${compose[@]}" config --quiet
+WATCHNEXT_IMAGE="$image" "${compose[@]}" pull app
+WATCHNEXT_IMAGE="$image" "${compose[@]}" up --detach --no-build --wait --wait-timeout 300
+echo "Deployed ${image}; the WatchNext PostgreSQL and Caddy named volumes were preserved."

@@ -1,0 +1,4 @@
+services:
+  app:
+    image: ${WATCHNEXT_IMAGE:?Set WATCHNEXT_IMAGE to the immutable GHCR image tag}
+    pull_policy: always

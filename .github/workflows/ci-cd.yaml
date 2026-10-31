@@ -1,0 +1,165 @@
+name: WatchNext CI/CD
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: watchnext-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  backend-tests:
+    name: Backend and shared tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.15.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Run backend and shared tests
+        run: pnpm exec vitest run --exclude 'tests/frontend/**'
+      - name: Check TypeScript
+        run: pnpm typecheck
+
+  frontend-tests:
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.15.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Run frontend tests
+        run: pnpm test tests/frontend
+
+  compose-integration-e2e:
+    name: ARM64 Compose integration and browser tests
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.15.0
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - uses: docker/setup-qemu-action@v3
+      - name: Build the Compose app image for Oracle A1 ARM64
+        run: |
+          docker compose --project-name watchnext-ci \
+            -f docker-compose.yaml \
+            -f deploy/oci/compose-ci.yaml \
+            build app
+          docker image inspect "ghcr.io/xiaodlb/watchnext:${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --format '{{.Os}}/{{.Architecture}}' | grep -Fx 'linux/arm64'
+          echo "WATCHNEXT_E2E_IMAGE=ghcr.io/xiaodlb/watchnext:${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+      - name: Run two-session Playwright journey against the built image
+        run: pnpm test:e2e:compose
+      - name: Run healthy and unhealthy Compose readiness checks
+        run: pnpm test:e2e:readiness
+      - name: Run PostgreSQL migration and persistence checks
+        run: pnpm test:e2e:migrations
+      - name: Publish the tested immutable image to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WATCHNEXT_IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG}"
+
+  deploy-oci:
+    name: Deploy to Oracle Cloud
+    runs-on: ubuntu-latest
+    needs: [compose-integration-e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.OCI_DEPLOY_ENABLED == 'true'
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      OCI_REGION: ${{ vars.OCI_REGION }}
+      OCI_IDENTITY_DOMAIN_URL: ${{ vars.OCI_IDENTITY_DOMAIN_URL }}
+      OCI_OAUTH_CLIENT_ID: ${{ vars.OCI_OAUTH_CLIENT_ID }}
+      OCI_OIDC_AUDIENCE: watchnext-oci-github-actions
+      OCI_COMPARTMENT_OCID: ${{ vars.OCI_COMPARTMENT_OCID }}
+      OCI_INSTANCE_OCID: ${{ vars.OCI_INSTANCE_OCID }}
+      WATCHNEXT_APP_ORIGIN: ${{ vars.WATCHNEXT_APP_ORIGIN }}
+      WATCHNEXT_IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${OCI_REGION:?Set repository variable OCI_REGION}"
+          : "${OCI_IDENTITY_DOMAIN_URL:?Set repository variable OCI_IDENTITY_DOMAIN_URL}"
+          : "${OCI_OAUTH_CLIENT_ID:?Set repository variable OCI_OAUTH_CLIENT_ID}"
+          : "${OCI_COMPARTMENT_OCID:?Set repository variable OCI_COMPARTMENT_OCID}"
+          : "${OCI_INSTANCE_OCID:?Set repository variable OCI_INSTANCE_OCID}"
+          : "${WATCHNEXT_APP_ORIGIN:?Set repository variable WATCHNEXT_APP_ORIGIN}"
+          [[ "$OCI_IDENTITY_DOMAIN_URL" =~ ^https://[^/]+/?$ ]]
+          [[ "$WATCHNEXT_APP_ORIGIN" =~ ^https://[^/]+$ ]]
+          [[ "$OCI_REGION" =~ ^[a-z0-9-]+$ ]]
+          [[ "$OCI_COMPARTMENT_OCID" == ocid1.compartment.* ]]
+          [[ "$OCI_INSTANCE_OCID" == ocid1.instance.* ]]
+          [[ "$WATCHNEXT_IMAGE_TAG" =~ ^[0-9a-f]{40}-[0-9]+-[0-9]+$ ]]
+      - name: Exchange GitHub OIDC token for a short-lived OCI RPST
+        env:
+          OCI_OAUTH_CLIENT_SECRET: ${{ secrets.OCI_OAUTH_CLIENT_SECRET }}
+        run: bash deploy/oci/exchange-rpst.sh
+      - name: Install OCI CLI
+        run: pipx install 'oci-cli==3.95.1'
+      - name: Submit and wait for the OCI Instance Agent Run Command
+        run: bash deploy/oci/submit-run-command.sh
+      - name: Check live HTTPS health endpoint
+        run: |
+          set -euo pipefail
+          curl --fail --show-error --silent \
+            --retry 24 --retry-delay 10 --retry-all-errors \
+            --connect-timeout 10 --max-time 20 \
+            "${WATCHNEXT_APP_ORIGIN%/}/v1/context" >/dev/null
+          echo "Deployment healthy at ${WATCHNEXT_APP_ORIGIN%/}/v1/context"
+      - name: Remove short-lived credentials
+        if: always()
+        run: |
+          if [[ -n "${WIF_TEMP_DIR:-}" && "$WIF_TEMP_DIR" == "$RUNNER_TEMP"/watchnext-oci-wif.* ]]; then
+            rm -rf -- "$WIF_TEMP_DIR"
+          fi
+
+  oci-deploy-disabled:
+    name: OCI deployment disabled
+    runs-on: ubuntu-latest
+    needs: [compose-integration-e2e]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.OCI_DEPLOY_ENABLED != 'true'
+    steps:
+      - name: Explain how to enable deployment
+        run: |
+          echo 'All CI and Compose checks passed. OCI deployment is disabled. Set repository variable OCI_DEPLOY_ENABLED=true after completing _docs/deploy-oci-cicd.md.' >> "$GITHUB_STEP_SUMMARY"

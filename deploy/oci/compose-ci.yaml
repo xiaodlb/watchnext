@@ -1,0 +1,7 @@
+services:
+  app:
+    image: ghcr.io/xiaodlb/watchnext:${GITHUB_SHA:-local}-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}
+    platform: linux/arm64
+    build:
+      labels:
+        org.opencontainers.image.source: https://github.com/xiaodlb/watchnext
