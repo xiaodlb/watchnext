@@ -124,37 +124,56 @@ async function waitAuthenticatedLibrary(page) {
   throw new Error(`Authenticated library API did not recover (HTTP ${lastStatus}; code=${lastCode}).`);
 }
 async function createAccount(page, username) {
+  stage = "opening synthetic account registration";
   await page.goto(origin);
   await page.getByRole("tab", { name: "Create account", exact: true }).click();
+  stage = "submitting synthetic account credentials";
   await page.getByLabel("Username", { exact: true }).fill(username);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  stage = "waiting for synthetic account recovery-code screen";
   await page.getByRole("heading", { name: "Save your recovery code" }).waitFor();
+  stage = "completing synthetic account setup";
   await page.getByRole("button", { name: "I saved it — continue" }).click();
+  stage = "waiting for the new account groups workspace";
   await page.getByRole("heading", { name: "Your groups" }).waitFor();
 }
 async function createGroup(page, groupName) {
+  stage = "entering synthetic group name";
   await page.getByLabel("Group name", { exact: true }).fill(groupName);
+  stage = "submitting synthetic group creation";
   await page.getByRole("button", { name: "Create group", exact: true }).click();
   const inviteSection = page.locator("section").filter({ has: page.getByRole("heading", { name: "Invite your group" }) });
+  stage = "waiting for synthetic group invitation panel";
   await inviteSection.getByRole("heading", { name: "Invite your group" }).waitFor();
+  stage = "opening the new group watchlist";
   await inviteSection.getByRole("button", { name: "Open watchlist" }).click();
+  stage = "waiting for the new group watchlist";
   await page.getByRole("heading", { name: groupName, exact: true }).waitFor();
 }
 async function saveTitle(page, title) {
+  stage = "opening manual title form";
   await page.goto(`${origin}/add`);
+  stage = "entering synthetic title details";
   await page.getByLabel("Title", { exact: true }).fill(title);
   await page.getByLabel("Runtime (min)", { exact: true }).fill("25");
   await page.getByRole("button", { name: "Funny", exact: true }).click();
+  stage = "submitting synthetic title save";
   await page.getByRole("button", { name: "Save to list", exact: true }).click();
+  stage = "waiting for synthetic title details";
   await page.getByRole("heading", { name: title, exact: true }).waitFor();
 }
 async function assertWatchlistTitle(page, groupName, title, shouldExist) {
+  stage = "opening watchlist for persistence verification";
   await page.goto(`${origin}/watchlist`);
+  stage = "waiting for selected group in persistence verification";
   await page.getByRole("heading", { name: groupName, exact: true }).waitFor();
   const titleLink = page.getByRole("link", { name: new RegExp(title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) });
-  if (shouldExist) await titleLink.waitFor();
+  if (shouldExist) {
+    stage = "waiting for required synthetic title in the watchlist";
+    await titleLink.waitFor();
+  }
   else if (await titleLink.count() !== 0) throw new Error("A title rejected during the outage appeared in the saved watchlist.");
 }
 
@@ -197,7 +216,6 @@ try {
   const failedTitle = `Database recovery rejected ${suffix}`;
   const recoveredTitle = `Database recovery restored ${suffix}`;
 
-  stage = "creating a synthetic account and group";
   await createAccount(page, `db_recovery_${suffix}`);
   await createGroup(page, groupName);
   stage = "saving and verifying the title before the outage";

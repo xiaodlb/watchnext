@@ -451,9 +451,9 @@ try {
     throw new Error(`Picker returned an unexpected exact-tier result: ${(await exactResult.innerText()).slice(0, 240)}`);
   }
   stage = "checking exact-match movie runtime summary";
-  const runtimeSummary = exactResult.getByText(/Movie · 18 min · Next:/);
+  const runtimeSummary = exactResult.getByText("Movie · 18m", { exact: false });
   try { await runtimeSummary.waitFor({ state: "visible" }); }
-  catch { throw new Error(`The exact-match movie runtime summary was not visible (matching elements=${await runtimeSummary.count().catch(() => 0)}).`); }
+  catch { throw new Error(`The exact-match full movie runtime was not visible (matching elements=${await runtimeSummary.count().catch(() => 0)}).`); }
   stage = "checking exact-match explanation";
   const exactExplanation = exactResult.getByText("Matches your mood and fits your available time.", { exact: true });
   try { await exactExplanation.waitFor({ state: "visible" }); }
@@ -465,7 +465,7 @@ try {
   if (await overResult.getByRole("heading", { name: fallbackTitle, exact: true }).count() !== 1) {
     throw new Error(`Picker returned an unexpected over-budget-tier result: ${(await overResult.innerText()).slice(0, 240)}`);
   }
-  await overResult.getByText("Movie · 25 min", { exact: true }).waitFor();
+  await overResult.getByText("Movie · 25m", { exact: false }).waitFor();
   await overResult.getByText("5 minutes longer than your available time.", { exact: true }).waitFor();
   if (await overResult.getByText(tooLongTitle, { exact: true }).count()) throw new Error("A title more than five minutes over budget was suggested.");
 
@@ -490,7 +490,7 @@ try {
   stage = "checking one next episode and its typical runtime";
   const episodeResult = await pick(owner, { viewers: ["You"], minutes: 45, mood: "Dark", scenario: "typical episode match" });
   await episodeResult.getByRole("heading", { name: animeTitle, exact: true }).waitFor();
-  await episodeResult.getByText("Anime · 42 min episode · Next: E5", { exact: true }).waitFor();
+  await episodeResult.getByText("Anime · 42m episode · Next: E5", { exact: true }).waitFor();
 
   stage = "checking no-match behavior without relaxing inputs";
   await pick(owner, { viewers: ["You", guestName], minutes: 1, mood: "Dark", scenario: "no-match boundary" });
