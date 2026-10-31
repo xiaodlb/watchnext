@@ -115,27 +115,44 @@ async function openSelectedGroup(page, groupName) {
   stage = "waiting for the group workspace heading";
   await page.getByRole("heading", { name: "Your groups", exact: true }).waitFor();
   const main = page.locator("main");
-  stage = "checking that the account's own group is listed";
-  try { await main.getByText(groupName, { exact: false }).waitFor(); }
-  catch (error) {
-    await Promise.all(responses);
-    const renderedOwn = await main.getByText(groupName, { exact: false }).count() > 0;
-    const authErrorVisible = await page.locator('p.mt-4.text-destructive[role="alert"]').isVisible().catch(() => false);
-    membershipDiagnostics.returnRequest = currentRequested;
-    membershipDiagnostics.returnResponseMembershipCount = responseCount;
-    membershipDiagnostics.returnResponseIncludesOwn = responseIncludesOwn;
-    membershipDiagnostics.renderedOwn = renderedOwn;
-    membershipDiagnostics.authErrorVisible = authErrorVisible;
-    throw error;
-  } finally {
-    page.off("request", onRequest);
-    page.off("response", onResponse);
+  stage = "checking that the account's own group has a visible shared-list row";
+  await Promise.all(responses);
+  const sharedLists = main.locator("section").filter({ has: page.getByRole("heading", { name: "Your shared lists", exact: true }) });
+  const ownRow = sharedLists.getByRole("listitem").filter({ hasText: groupName });
+  const ownText = ownRow.getByText(groupName, { exact: false });
+  const openButton = ownRow.getByRole("button", { name: "Open", exact: true });
+  const ownTextAnywhere = main.getByText(groupName, { exact: false });
+  const sharedListsHeading = main.getByRole("heading", { name: "Your shared lists", exact: true });
+  const selectedMembersHeading = main.getByRole("heading", { name: `Members of ${groupName}`, exact: true });
+  const rowCount = await ownRow.count().catch(() => 0);
+  const buttonCount = await openButton.count().catch(() => 0);
+  const membershipHeadingCount = await selectedMembersHeading.count().catch(() => 0);
+  membershipDiagnostics.returnRequest = currentRequested;
+  membershipDiagnostics.returnResponseMembershipCount = responseCount;
+  membershipDiagnostics.returnResponseIncludesOwn = responseIncludesOwn;
+  membershipDiagnostics.authErrorVisible = await page.locator('p.mt-4.text-destructive[role="alert"]').isVisible().catch(() => false);
+  membershipDiagnostics.groupTextAnywhereCount = await ownTextAnywhere.count().catch(() => 0);
+  membershipDiagnostics.groupTextAnywhereVisible = await ownTextAnywhere.isVisible().catch(() => false);
+  membershipDiagnostics.sharedListsHeadingCount = await sharedListsHeading.count().catch(() => 0);
+  membershipDiagnostics.sharedListsHeadingVisible = await sharedListsHeading.isVisible().catch(() => false);
+  membershipDiagnostics.ownGroupRowCount = rowCount;
+  membershipDiagnostics.ownGroupRowVisible = rowCount === 1 && await ownRow.isVisible().catch(() => false);
+  membershipDiagnostics.ownGroupTextCount = await ownText.count().catch(() => 0);
+  membershipDiagnostics.ownGroupTextVisible = await ownText.isVisible().catch(() => false);
+  membershipDiagnostics.ownGroupLinkCount = await ownRow.getByRole("link").count().catch(() => 0);
+  membershipDiagnostics.ownGroupOpenButtonCount = buttonCount;
+  membershipDiagnostics.ownGroupOpenButtonVisible = buttonCount === 1 && await openButton.isVisible().catch(() => false);
+  membershipDiagnostics.selectedMembersHeadingCount = membershipHeadingCount;
+  membershipDiagnostics.selectedMembersHeadingVisible = await selectedMembersHeading.isVisible().catch(() => false);
+  page.off("request", onRequest);
+  page.off("response", onResponse);
+  if (rowCount !== 1 || !membershipDiagnostics.ownGroupRowVisible || buttonCount !== 1 || !membershipDiagnostics.ownGroupOpenButtonVisible) {
+    throw new Error("The account's own group was not available as one visible shared-list row with one visible Open button.");
   }
   const members = main.locator("section").filter({ has: page.getByRole("heading", { name: `Members of ${groupName}`, exact: true }) });
   if (await members.count() === 0) {
-    stage = "opening the account's own listed group";
-    const groupRow = main.getByRole("listitem").filter({ hasText: groupName });
-    await groupRow.getByRole("button", { name: "Open", exact: true }).click();
+    stage = "opening the account's own visible shared-list row";
+    await openButton.click();
     stage = "waiting for the opened group's watchlist";
     await page.getByRole("heading", { name: groupName, exact: true }).waitFor();
     stage = "reopening the group workspace";
