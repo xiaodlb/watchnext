@@ -129,28 +129,33 @@ async function pick(page, { viewers, minutes, mood }) {
   }).then(async response => {
     const url = new URL(response.url());
     const path = url.pathname === "/v1/picker/pick" ? url.pathname : "/v1/picker/cycles/:id/next";
-    let code = "none";
+    let codeCategory = "none";
+    const contentType = response.headers()["content-type"]?.split(";", 1)[0] ?? "missing";
     try {
       const body = await response.json();
       const candidate = body?.error?.code;
-      if (typeof candidate === "string" && /^[a-z0-9_-]{1,48}$/i.test(candidate)) code = candidate;
-    } catch { code = "non-json"; }
+      if (candidate === "validation_failed") codeCategory = "validation";
+      else if (candidate === "service_unavailable") codeCategory = "service-unavailable";
+      else if (candidate === "conflict") codeCategory = "conflict";
+      else if (typeof candidate === "string") codeCategory = "other-api-error";
+    } catch { codeCategory = "non-json"; }
     const status = response.status();
     const category = status >= 500 ? "server-error" : status >= 400 ? "request-error" : "success";
-    return `HTTP ${status} ${path} category=${category} code=${code}`;
+    return `HTTP ${status} ${path} content-type=${contentType} category=${category} error-code-category=${codeCategory}`;
   }).catch(() => "picker HTTP response unavailable");
   await page.getByRole("button", { name: "Pick something", exact: true }).click();
   stage = "waiting for picker result";
   const result = page.locator('[aria-live="polite"] section');
-  const requestError = page.getByRole("alert").filter({ hasText: "The request could not be completed." });
+  const alert = page.locator("main [role=alert]").filter({ hasText: /\S/ }).first();
   const outcome = await Promise.race([
-    result.waitFor().then(() => "recommendation"),
-    requestError.waitFor().then(() => "request error"),
+    result.waitFor({ state: "visible" }).then(() => "recommendation"),
+    alert.waitFor({ state: "visible" }).then(() => "alert"),
   ]);
-  if (outcome === "request error" || await requestError.isVisible()) {
-    const diagnostic = await pickerResponse;
+  if (outcome !== "recommendation") {
+    const buttonEnabled = await page.getByRole("button", { name: "Pick something", exact: true }).isEnabled().catch(() => false);
+    const diagnostic = await Promise.race([pickerResponse, new Promise(resolveDiagnostic => setTimeout(() => resolveDiagnostic("picker HTTP response unavailable"), 2500))]);
     const logSignals = diagnostic.includes("category=server-error") ? `; isolated-app-log-categories=${safePickerLogCategories()}` : "";
-    throw new Error(`Picker showed the request-error alert instead of a recommendation (${diagnostic}${logSignals}).`);
+    throw new Error(`Picker produced a visible alert instead of a recommendation (button-enabled=${buttonEnabled}; ${diagnostic}${logSignals}).`);
   }
   return result;
 }
@@ -173,6 +178,35 @@ async function assertWatchlistEntry(page, title, contributors, visibleNames) {
   stage = "checking visible contributor names";
   const text = (await attribution.innerText()).replace(/\s+/g, " ").trim();
   if (!visibleNames.every(name => text.includes(name))) throw new Error("Visible contributor names did not match.");
+}
+
+async function groupApiSummary(page) {
+  return page.evaluate(async () => {
+    async function read(path) {
+      try {
+        const response = await fetch(path, { cache: "no-store" });
+        let body = null;
+        try { body = await response.json(); } catch {}
+        return { status: response.status, body };
+      } catch { return { status: 0, body: null }; }
+    }
+    const [contextResult, workspaceResult] = await Promise.all([read("/v1/context"), read("/v1/groups/current")]);
+    const context = contextResult.body?.context;
+    const memberships = contextResult.body?.account?.memberships;
+    const workspace = workspaceResult.body;
+    return {
+      contextStatus: contextResult.status,
+      contextMode: typeof context?.mode === "string" ? context.mode : "missing",
+      contextHasSelectedGroup: Boolean(context?.groupId),
+      contextHasMembership: Array.isArray(memberships) && memberships.length > 0,
+      contextGroupMatchesMembership: Array.isArray(memberships) && memberships.includes(context?.groupId),
+      workspaceStatus: workspaceResult.status,
+      workspaceHasSelectedGroup: Boolean(workspace?.selected?.id),
+      workspaceMemberCount: Array.isArray(workspace?.members) ? workspace.members.length : -1,
+      workspaceHasCurrentMember: Boolean(workspace?.currentMemberId),
+      workspaceCurrentMemberIncluded: Array.isArray(workspace?.members) && workspace.members.some(member => member.id === workspace.currentMemberId),
+    };
+  });
 }
 
 let origin = "", groupName = "";
@@ -233,6 +267,14 @@ try {
   if (inviteUrl.origin !== origin || !inviteUrl.pathname.startsWith("/invite/")) throw new Error("Invitation does not target the test server.");
   await inviteSection.getByRole("button", { name: "Open watchlist" }).click();
   await owner.getByRole("heading", { name: groupName }).waitFor();
+  if (process.env.WATCHNEXT_PICKER_UI_ONLY === "1") {
+    stage = "adding the picker-only synthetic title";
+    const pickerTitle = `Picker UI probe ${suffix}`;
+    await addTitle(owner, pickerTitle, { minutes: 18, mood: "Funny" });
+    const recommendation = await pick(owner, { viewers: ["You"], minutes: 20, mood: "Funny" });
+    await recommendation.getByRole("heading", { name: pickerTitle, exact: true }).waitFor({ state: "visible" });
+    console.log("PASS: picker recommendation was visibly rendered in the browser.");
+  } else {
   stage = "registering and signing in the second account";
   await register(guest, `guest_${suffix}`, true);
   stage = "joining the shared group from the second session";
@@ -240,13 +282,19 @@ try {
   await guest.getByRole("button", { name: "Open invitation" }).click();
   await guest.getByRole("button", { name: "Join group" }).click();
   await guest.getByRole("heading", { name: groupName }).waitFor();
-  stage = "checking group membership in both independent sessions";
-  for (const [page, own, other] of [[owner, `owner_${suffix}`, `guest_${suffix}`], [guest, `guest_${suffix}`, `owner_${suffix}`]]) {
+  for (const [sessionName, page, own, other] of [["owner", owner, `owner_${suffix}`, `guest_${suffix}`], ["guest", guest, `guest_${suffix}`, `owner_${suffix}`]]) {
+    stage = `checking group membership in ${sessionName} session`;
     await page.goto(`${origin}/groups`);
     const members = page.locator("section").filter({ has: page.getByRole("heading", { name: `Members of E2E group ${suffix}`, exact: true }) });
-    await members.getByRole("heading", { name: `Members of E2E group ${suffix}`, exact: true }).waitFor();
-    await members.getByRole("listitem").filter({ hasText: `${own} · You` }).waitFor();
-    await members.getByRole("listitem").filter({ hasText: other }).waitFor();
+    try {
+      await members.getByRole("heading", { name: `Members of E2E group ${suffix}`, exact: true }).waitFor();
+      await members.getByRole("listitem").filter({ hasText: `${own} · You` }).waitFor();
+      await members.getByRole("listitem").filter({ hasText: other }).waitFor();
+    } catch {
+      stage = `checking group membership in ${sessionName} session (group API diagnostics)`;
+      const summary = await groupApiSummary(page);
+      throw new Error(`Group member heading or list was missing: ${JSON.stringify(summary)}`);
+    }
   }
   stage = "adding a title as the second account";
   const title = `Guest Compose E2E film ${suffix}`;
@@ -387,6 +435,7 @@ try {
   if (await owner.getByText("Tonight's pick", { exact: true }).count()) throw new Error("The picker showed a suggestion when no permitted match existed.");
 
   console.log("PASS: two-way title sharing and contributor attribution, duplicate YouTube link consolidation, independent personal history, exact picker matches and exclusions, disclosed fallback tiers, movie and episode runtimes, and no-match behavior.");
+  }
 } catch (error) {
   failed = true;
   // Playwright errors can contain private invitation URLs or form values.
