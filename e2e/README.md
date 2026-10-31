@@ -55,3 +55,20 @@ As with the two-session command, `WATCHNEXT_E2E_IMAGE` optionally chooses an
 existing local image and skips the build. Use this only when the image matches
 the checkout; the caller is responsible for that match. Docker and the pinned
 Playwright Chromium must be available.
+
+## PostgreSQL migration idempotency
+
+```sh
+pnpm test:e2e:migrations
+```
+
+This test starts PostgreSQL first in a unique Compose project, verifies its
+fresh owned volume has no `_prisma_migrations` table, then starts the real app.
+It checks that `20261026000000_watchnext_portability` has exactly one
+successful migration-history row, creates and opens a synthetic title, restarts
+only the test app service, and verifies the migration row and title again.
+Cleanup removes only verified resources belonging to this test project.
+
+The test builds the current checkout by default. Set `WATCHNEXT_E2E_IMAGE` to
+an existing image only when that image contains the exact product source under
+test; this skips the build and fails if the image is missing.
