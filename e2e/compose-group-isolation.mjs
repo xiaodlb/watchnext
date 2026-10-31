@@ -94,13 +94,43 @@ async function apiGet(page, path) {
   }, path);
 }
 async function openSelectedGroup(page, groupName) {
+  let currentRequested = false;
+  let responseCount = null, responseIncludesOwn = false;
+  const responses = [];
+  const onRequest = request => {
+    if (new URL(request.url()).pathname === "/v1/groups/current") currentRequested = true;
+  };
+  const onResponse = response => {
+    if (new URL(response.url()).pathname !== "/v1/groups/current") return;
+    responses.push(response.json().then(data => {
+      const memberships = data?.memberships;
+      responseCount = Array.isArray(memberships) ? memberships.length : null;
+      responseIncludesOwn = Array.isArray(memberships) && memberships.some(group => group.name === groupName);
+    }).catch(() => {}));
+  };
+  page.on("request", onRequest);
+  page.on("response", onResponse);
   stage = "opening the signed-in account's group workspace";
   await page.goto(`${origin}/groups`);
   stage = "waiting for the group workspace heading";
   await page.getByRole("heading", { name: "Your groups", exact: true }).waitFor();
   const main = page.locator("main");
   stage = "checking that the account's own group is listed";
-  await main.getByText(groupName, { exact: false }).waitFor();
+  try { await main.getByText(groupName, { exact: false }).waitFor(); }
+  catch (error) {
+    await Promise.all(responses);
+    const renderedOwn = await main.getByText(groupName, { exact: false }).count() > 0;
+    const authErrorVisible = await page.locator('p.mt-4.text-destructive[role="alert"]').isVisible().catch(() => false);
+    membershipDiagnostics.returnRequest = currentRequested;
+    membershipDiagnostics.returnResponseMembershipCount = responseCount;
+    membershipDiagnostics.returnResponseIncludesOwn = responseIncludesOwn;
+    membershipDiagnostics.renderedOwn = renderedOwn;
+    membershipDiagnostics.authErrorVisible = authErrorVisible;
+    throw error;
+  } finally {
+    page.off("request", onRequest);
+    page.off("response", onResponse);
+  }
   const members = main.locator("section").filter({ has: page.getByRole("heading", { name: `Members of ${groupName}`, exact: true }) });
   if (await members.count() === 0) {
     stage = "opening the account's own listed group";
