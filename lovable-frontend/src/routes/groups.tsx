@@ -1,13 +1,14 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Btn } from "@/components/ui-kit";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/groups")({ component: Groups });
 
-function Groups() {
+export function Groups() {
   const auth = useAuth();
   const nav = useNavigate();
+  useEffect(() => { void auth.refresh().catch(() => {}); }, [auth.refresh]);
   const [name, setName] = useState("");
   const [invitation, setInvitation] = useState("");
   const [createdInvite, setCreatedInvite] = useState("");
