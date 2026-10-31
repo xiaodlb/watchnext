@@ -91,6 +91,14 @@ async function signIn(page, username) {
 async function assertGroupMembers(page, own, other) {
   stage = `opening groups for ${own}`;
   await page.goto(`${origin}/groups`);
+  const sharedLists = page.locator("section").filter({ has: page.getByRole("heading", { name: "Your shared lists", exact: true }) });
+  stage = `checking the persisted shared group is listed for ${own}`;
+  const groupRow = sharedLists.getByRole("listitem").filter({ hasText: groupName });
+  await groupRow.waitFor();
+  stage = `opening the persisted shared group for ${own}`;
+  await groupRow.getByRole("button", { name: "Open", exact: true }).click();
+  await page.getByRole("heading", { name: groupName, exact: true }).waitFor();
+  await page.goto(`${origin}/groups`);
   const section = page.locator("section").filter({ has: page.getByRole("heading", { name: `Members of ${groupName}`, exact: true }) });
   stage = `checking persisted group heading for ${own}`;
   try {
