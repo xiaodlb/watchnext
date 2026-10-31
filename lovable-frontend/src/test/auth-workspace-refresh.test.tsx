@@ -1,6 +1,17 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "@/lib/auth";
+import { Groups } from "@/routes/groups";
+
+vi.mock("@tanstack/react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-router")>();
+  return {
+    ...actual,
+    Link: ({ to, children, ...props }: { to?: string; children: React.ReactNode; [key: string]: unknown }) => <a href={to ?? "#"} {...props}>{children}</a>,
+    useNavigate: () => vi.fn(),
+  };
+});
 
 function jsonResponse(value: unknown) {
   return new Response(JSON.stringify(value), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -126,5 +137,50 @@ describe("account workspace refresh", () => {
     });
     expect(screen.getByTestId("groups")).toHaveTextContent("First watchlist,Second watchlist");
     expect(workspaceReads).toBe(3);
+  });
+
+  it("refreshes group discovery when entering the groups page", async () => {
+    const context = { revision: 5, mode: "account", groupId: "group-a" } as const;
+    const groupA = { id: "group-a", name: "Persistent watchlist", kind: "account", generation: 1 };
+    const staleWorkspace = {
+      mode: "account", memberships: [], selected: null, members: [], profileId: null,
+      currentMemberId: null, canManage: false, pending: null, context,
+    };
+    const currentWorkspace = {
+      ...staleWorkspace, memberships: [groupA], selected: groupA, currentMemberId: "member-a", canManage: true,
+    };
+    let workspaceReads = 0;
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+      const route = String(input);
+      if (route === "/v1/context") return Promise.resolve(jsonResponse({
+        context,
+        account: { id: "account-a", username: "watcher", memberships: [groupA.id] },
+        group: groupA,
+      }));
+      if (route === "/v1/groups/current") {
+        workspaceReads++;
+        return Promise.resolve(jsonResponse(workspaceReads === 1 ? staleWorkspace : currentWorkspace));
+      }
+      if (route === "/v1/library") return Promise.resolve(jsonResponse({ context, items: [] }));
+      throw new Error(`Unexpected request ${route}`);
+    }));
+
+    function RouteHarness() {
+      const auth = useAuth();
+      const [showGroups, setShowGroups] = useState(false);
+      return <>
+        <output data-testid="workspace-size">{auth.workspace?.memberships.length ?? "unset"}</output>
+        <button type="button" onClick={() => setShowGroups(true)}>Enter groups page</button>
+        {showGroups && <Groups />}
+      </>;
+    }
+    render(<AuthProvider><RouteHarness /></AuthProvider>);
+
+    await waitFor(() => expect(screen.getByTestId("workspace-size")).toHaveTextContent("0"));
+    expect(workspaceReads).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: "Enter groups page" }));
+    await screen.findByRole("button", { name: "Open", exact: true });
+    expect(screen.getAllByRole("listitem").some(item => item.textContent?.includes("Persistent watchlist"))).toBe(true);
+    expect(workspaceReads).toBe(2);
   });
 });
