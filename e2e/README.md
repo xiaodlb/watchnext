@@ -112,3 +112,21 @@ recovery codes, cookies or invitation URLs.
 By default the command builds the current checkout. To skip the build, set
 `WATCHNEXT_E2E_IMAGE` to an already built image for the exact product source
 being tested. The command checks that image exists and never pulls or retags it.
+## PostgreSQL outage and recovery
+
+```sh
+pnpm test:e2e:database-recovery
+```
+
+This test creates a synthetic account, group, and saved title in a new Compose
+project. It stops only that project's verified PostgreSQL container while the
+app remains running, checks that a title save produces a visible error instead
+of a success page, then starts the same PostgreSQL container and volume again.
+It verifies the original title is still available, the failed title was not
+saved, and a new save succeeds after recovery. Cleanup is limited to resources
+whose Compose ownership labels match the generated project.
+
+The test builds the current checkout by default. Set `WATCHNEXT_E2E_IMAGE` to
+an existing image only when that image contains the exact product source under
+test; this skips the build and fails if the image is missing. Use the pinned
+Playwright Chromium and ensure Docker Desktop is running.
