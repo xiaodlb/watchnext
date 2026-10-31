@@ -1,0 +1,40 @@
+services:
+  postgres:
+    restart: unless-stopped
+
+  app:
+    restart: unless-stopped
+    environment:
+      WATCHNEXT_APP_ORIGIN: ${WATCHNEXT_APP_ORIGIN:?Set WATCHNEXT_APP_ORIGIN to the public HTTPS origin}
+      WATCHNEXT_COMPOSE_DB_PASSWORD: ${WATCHNEXT_COMPOSE_DB_PASSWORD:?Set a unique database password}
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/v1/context').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      WATCHNEXT_DOMAIN: ${WATCHNEXT_DOMAIN:?Set WATCHNEXT_DOMAIN to a DNS name pointing to this VM}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/oracle/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
