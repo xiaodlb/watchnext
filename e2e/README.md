@@ -55,3 +55,23 @@ As with the two-session command, `WATCHNEXT_E2E_IMAGE` optionally chooses an
 existing local image and skips the build. Use this only when the image matches
 the checkout; the caller is responsible for that match. Docker and the pinned
 Playwright Chromium must be available.
+
+## Group access isolation
+
+```sh
+pnpm test:e2e:isolation
+```
+
+This check creates two independent accounts, each with a separate group and a
+unique title, in an isolated Compose project. It verifies that each account can
+see its own group and title, while the other group's name and title remain
+absent from the group workspace, watchlist and `GET /v1/library`. It also opens
+the other account's title URL directly and requests `GET /v1/library/{id}`;
+neither response may expose the foreign title. The test uses separate browser
+contexts, blocks requests outside the test app, generates synthetic data, and
+removes only its verified Compose resources. It retains no credentials,
+recovery codes, cookies or invitation URLs.
+
+By default the command builds the current checkout. To skip the build, set
+`WATCHNEXT_E2E_IMAGE` to an already built image for the exact product source
+being tested. The command checks that image exists and never pulls or retags it.

@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:e2e": "node tests/e2e/run.mjs",
     "test:e2e:compose": "node e2e/compose-two-sessions.mjs",
+    "test:e2e:isolation": "node e2e/compose-group-isolation.mjs",
     "test:e2e:readiness": "node e2e/compose-readiness.mjs",
     "test:visual-reference": "node tests/fixtures/together-tonight-regression.mjs",
     "test:http-memory": "node tests/fixtures/http-memory-check.mjs",
