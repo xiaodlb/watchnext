@@ -116,7 +116,7 @@ async function openSelectedGroup(page, groupName) {
   await section.getByRole("heading", { name: `Members of ${groupName}`, exact: true }).waitFor();
 }
 async function assertOwnWorkspace(page, ownGroup, ownTitle, ownUsername, foreignGroup, foreignTitle) {
-  stage = `checking own group workspace for ${ownUsername}`;
+  stage = `checking own group workspace`;
   await openSelectedGroup(page, ownGroup);
   const groupsText = await page.locator("main").innerText();
   const groupFlags = {
@@ -129,14 +129,14 @@ async function assertOwnWorkspace(page, ownGroup, ownTitle, ownUsername, foreign
     throw new Error(`Workspace visibility flags: ${JSON.stringify(groupFlags)}`);
   }
 
-  stage = `checking own watchlist for ${ownUsername}`;
+  stage = `checking own watchlist`;
   await page.goto(`${origin}/watchlist`);
   await page.getByRole("heading", { name: ownGroup, exact: true }).waitFor();
   await page.getByRole("link", { name: new RegExp(ownTitle) }).waitFor();
   const watchlistText = await page.locator("main").innerText();
   if (watchlistText.includes(foreignGroup) || watchlistText.includes(foreignTitle)) throw new Error("Foreign group data appeared in the watchlist.");
 
-  stage = `checking the library API for ${ownUsername}`;
+  stage = `checking the library API`;
   const listResponse = await apiGet(page, "/v1/library");
   if (listResponse.status !== 200) throw new Error("The own-group library request did not succeed.");
   const list = JSON.parse(listResponse.text);
@@ -145,13 +145,13 @@ async function assertOwnWorkspace(page, ownGroup, ownTitle, ownUsername, foreign
     throw new Error("The library API returned missing own data or foreign group data.");
   }
 
-  stage = `checking direct foreign title access for ${ownUsername}`;
+  stage = `checking direct foreign title access`;
   await page.goto(`${origin}/title/${foreignTitleId}`);
   await page.getByText("Title not found.", { exact: false }).waitFor();
   const detailText = await page.locator("main").innerText();
   if (detailText.includes(foreignTitle) || detailText.includes(foreignGroup)) throw new Error("The foreign title page exposed its content.");
 
-  stage = `checking the protected foreign title API for ${ownUsername}`;
+  stage = `checking the protected foreign title API`;
   const foreignResponse = await apiGet(page, `/v1/library/${encodeURIComponent(foreignTitleId)}`);
   if (foreignResponse.status === 200 || foreignResponse.text.includes(foreignTitle) || foreignResponse.text.includes(foreignGroup)) {
     throw new Error("The protected title API exposed a foreign group's content.");
@@ -212,13 +212,28 @@ try {
   await createAccount(owner, ownerName);
   await createAccount(guest, guestName);
 
-  stage = "creating separate groups";
+  stage = "creating the first account's group";
   await createGroup(owner, ownerGroup);
-  await createGroup(guest, guestGroup);
-
-  stage = "saving one title in each group";
+  stage = "recording initial own-group membership";
+  const initialContext = await apiGet(owner, "/v1/context");
+  if (initialContext.status !== 200) throw new Error("Initial account context request failed.");
+  const initial = JSON.parse(initialContext.text);
+  const ownerGroupId = initial.group?.id;
+  const initialMember = typeof ownerGroupId === "string" && Array.isArray(initial.account?.memberships) && initial.account.memberships.includes(ownerGroupId);
+  console.log(`Own-group membership before other account activity: ${initialMember}`);
+  if (!initialMember) throw new Error("Initial own-group membership missing.");
+  stage = "saving first account title";
   const ownerTitleId = await createTitle(owner, ownerTitle);
+  stage = "creating the second account's group and title";
+  await createGroup(guest, guestGroup);
   foreignTitleId = await createTitle(guest, guestTitle);
+  stage = "checking own-group membership after other account activity";
+  const laterContext = await apiGet(owner, "/v1/context");
+  if (laterContext.status !== 200) throw new Error("Later account context request failed.");
+  const later = JSON.parse(laterContext.text);
+  const laterMember = Array.isArray(later.account?.memberships) && later.account.memberships.includes(ownerGroupId);
+  console.log(`Own-group membership after other account activity: ${laterMember}`);
+  if (!laterMember) throw new Error("Own-group membership missing after other account activity.");
 
   await assertOwnWorkspace(owner, ownerGroup, ownerTitle, ownerName, guestGroup, guestTitle);
   foreignTitleId = ownerTitleId;
