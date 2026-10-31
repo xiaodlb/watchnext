@@ -2,7 +2,7 @@
 
 The GitHub Actions workflow runs the backend/shared and frontend suites in parallel. When both pass, it builds the Compose app image for `linux/arm64`, then runs the existing PostgreSQL migration, Compose readiness and Playwright two-session checks against that exact image. A successful push to `main` publishes the tested image to GHCR with a tag containing the commit SHA, workflow run ID and run attempt. A new tag is used for every attempt so the image that was tested is the image deployed.
 
-Deployment runs only on a successful push to `main`, only after all Compose checks pass, and only when the repository variable `OCI_DEPLOY_ENABLED` is exactly `true`. Pull requests never publish the image or deploy. Deployment uses GitHub's short-lived OIDC token, exchanges it for a short-lived OCI Resource Principal Session Token (RPST), and asks the OCI Instance Agent Run Command plugin to start a narrowly scoped deployment helper on the existing VM. The final step checks the public HTTPS `/v1/context` endpoint.
+Deployment runs only on a successful push to `main`, only after all Compose checks pass, and only when the repository variable `OCI_DEPLOY_ENABLED` is exactly `true`. Pull requests never publish the image or deploy. Deployment uses GitHub's short-lived OIDC token, exchanges it for a short-lived OCI Resource Principal Session Token (RPST), and asks the OCI Instance Agent Run Command plugin to start a narrowly scoped deployment helper on the existing VM. The final step checks the public HTTPS `/health/readyz` endpoint. That route runs a database query and returns success only while the app can reach its configured database; `/v1/context` can return an anonymous response after a database error and is not a readiness check.
 
 ## Existing VM and data
 
@@ -100,4 +100,4 @@ To disable deployment at any time, unset `OCI_DEPLOY_ENABLED` or change it to a 
 3. The isolated PostgreSQL migration, readiness and Playwright multi-session scenarios all use that same image and clean up only their own resources.
 4. Only a passing `main` push publishes the unique image tag `ghcr.io/xiaodlb/watchnext:<commit-sha>-<run-id>-<attempt>`.
 5. When deployment is enabled, OCI Run Command deploys the same SHA tag while preserving the existing `.env` and Compose named volumes.
-6. GitHub Actions retries `https://<configured-origin>/v1/context` and fails the workflow if the endpoint does not return a successful response.
+6. GitHub Actions retries `https://<configured-origin>/health/readyz` and fails the workflow if the app cannot reach its database.

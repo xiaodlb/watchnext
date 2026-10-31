@@ -116,8 +116,10 @@ try {
   const home = await page.goto(origin); if (!home?.ok()) throw new Error("Home page returned an error.");
   await page.getByRole("tab", { name: "Sign in", exact: true }).waitFor();
   const api = await page.request.get(`${origin}/v1/context`, { timeout: 10000 }); if (!api.ok()) throw new Error("Context API returned an error.");
+  const readiness = await page.request.get(`${origin}/health/readyz`, { timeout: 10000 });
+  if (!readiness.ok() || (await readiness.json()).status !== "ok") throw new Error("Database readiness endpoint did not confirm readiness.");
   await context.close(); await browser.close(); browser = undefined;
-  console.log("PASS: Playwright received successful home and /v1/context responses.");
+  console.log("PASS: Playwright received successful home, /v1/context and database readiness responses.");
   stage = "checking the unhealthy PostgreSQL refusal";
   env.WATCHNEXT_COMPOSE_PORT = String(await freePort());
   const negative = newProject(true); negative.started = true;

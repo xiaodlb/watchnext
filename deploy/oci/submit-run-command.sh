@@ -51,8 +51,8 @@ for attempt in $(seq 1 180); do
   state="$(jq --raw-output '.data.lifecycleState // empty' <<<"$result" 2>/dev/null || true)"
   case "$state" in
     SUCCEEDED)
-      exit_code="$(jq --raw-output '.data.content.exitCode // 0' <<<"$result")"
-      if [[ "$exit_code" != 0 ]]; then
+      exit_code="$(jq --raw-output '.data.content.exitCode // empty' <<<"$result")"
+      if [[ ! "$exit_code" =~ ^[0-9]+$ || "$exit_code" != 0 ]]; then
         echo "OCI Run Command reported exit code ${exit_code}." >&2
         exit 1
       fi
