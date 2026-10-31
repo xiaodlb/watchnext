@@ -13,6 +13,7 @@ import { handlePrismaIdentity } from "./identity-service";
 import { metadataProvidersForHttp } from "../http-memory/service";
 import { lookupMetadata } from "../metadata/lookup";
 import { youtubeLookupQuery } from "../metadata/youtube-input";
+import { publicApplicationFailure } from "./public-error";
 
 type Input = Record<string, unknown>;
 type Context = { mode: "account" | "legacy"; groupId: string; memberId: string | null; revision: number; accountId: string | null; sessionHash: string; sessionId: string };
@@ -192,8 +193,7 @@ export async function handlePrismaApplication(request: Request, path: string[]):
     }
     return fail(404, "HTTP operation is unavailable.");
   } catch (cause) {
-    const message = cause instanceof Error ? cause.message : "The request could not be completed.";
-    const status = /stale|access|Authentication|origin|invalid|Current group/i.test(message) ? 409 : 422;
-    return fail(status, message);
+    const failure = publicApplicationFailure(cause);
+    return json({ error: { code: failure.code, message: failure.message, retryable: failure.retryable } }, failure.status);
   }
 }
