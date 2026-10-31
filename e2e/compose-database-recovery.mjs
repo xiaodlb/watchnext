@@ -206,19 +206,31 @@ try {
   assertOwnedVolumeExists();
 
   stage = "waiting for the visible failed-save alert during the outage";
+  const responsePromise = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.origin === origin && url.pathname === "/v1/library/manual" && response.request().method() === "POST";
+  });
   await page.getByRole("button", { name: "Save to list", exact: true }).click();
+  const saveResponse = await responsePromise;
+  const apiFlags = await saveResponse.json().then(data => {
+    const message = data?.error?.message ?? data?.message;
+    const body = JSON.stringify(data);
+    const internal = /https?:\/\/|postgres(?:ql)?:\/\/|password|credential|recovery|cookie|prisma|\bsql\b|econnrefused|connection\s+(?:refused|timeout|failed)|(?:localhost|127\.0\.0\.1|postgres):\d+|stack trace|\bat\s+\S+\s*\([^)]*:\d+:\d+\)/i;
+    return { failed: !saveResponse.ok(), nonEmpty: typeof message === "string" && message.trim().length > 0, unsafe: internal.test(body) };
+  }).catch(() => ({ failed: !saveResponse.ok(), nonEmpty: false, unsafe: false }));
   const alert = page.getByRole("alert");
   await alert.waitFor({ state: "visible" });
   const alertText = (await alert.innerText()).trim();
   stage = "checking that the outage alert is safe and does not report success";
   const alertFlags = {
     nonEmpty: Boolean(alertText),
-    containsSensitiveOrRawDatabaseDetail: /https?:\/\/|password|recovery|cookie|postgres(?:ql)?:\/\/|Prisma|ECONNREFUSED|connection\s+(?:refused|timeout)/i.test(alertText),
+    containsSensitiveOrRawDatabaseDetail: /https?:\/\/|postgres(?:ql)?:\/\/|password|credential|recovery|cookie|prisma|\bsql\b|econnrefused|connection\s+(?:refused|timeout|failed)|(?:localhost|127\.0\.0\.1|postgres):\d+|stack trace|\bat\s+\S+\s*\([^)]*:\d+:\d+\)/i.test(alertText),
     claimsSuccess: /\bsaved\b|\bsuccess(?:ful|fully)?\b|\badded\b/i.test(alertText),
     stayedOnAddForm: new URL(page.url()).pathname === "/add",
     failedTitleHeadingVisible: await page.getByRole("heading", { name: failedTitle, exact: true }).count() !== 0,
   };
-  safeDiagnostic = `alert non-empty=${alertFlags.nonEmpty}, unsafe-detail=${alertFlags.containsSensitiveOrRawDatabaseDetail}, success-claim=${alertFlags.claimsSuccess}, stayed-on-form=${alertFlags.stayedOnAddForm}, failed-title-page=${alertFlags.failedTitleHeadingVisible}`;
+  safeDiagnostic = `api failed=${apiFlags.failed}, api non-empty=${apiFlags.nonEmpty}, api unsafe-detail=${apiFlags.unsafe}; alert non-empty=${alertFlags.nonEmpty}, unsafe-detail=${alertFlags.containsSensitiveOrRawDatabaseDetail}, success-claim=${alertFlags.claimsSuccess}, stayed-on-form=${alertFlags.stayedOnAddForm}, failed-title-page=${alertFlags.failedTitleHeadingVisible}`;
+  if (!apiFlags.failed || !apiFlags.nonEmpty || apiFlags.unsafe) throw new Error("The outage API response was not a safe generic error.");
   if (!alertFlags.nonEmpty || alertFlags.containsSensitiveOrRawDatabaseDetail) throw new Error("The outage did not produce a safe, visible error message.");
   if (alertFlags.claimsSuccess) throw new Error("The outage error incorrectly claims the title was saved.");
   if (alertFlags.failedTitleHeadingVisible) throw new Error("The failed save navigated to a success page.");
