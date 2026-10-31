@@ -9,6 +9,23 @@ pnpm exec playwright install chromium
 pnpm test:e2e:compose
 ```
 
+For the full picker acceptance run, leave the optional picker-only probe
+variables unset. In PowerShell, clear them before running the command:
+
+```powershell
+Remove-Item Env:WATCHNEXT_PICKER_UI_ONLY, Env:WATCHNEXT_PICKER_EXACT_ONLY -ErrorAction SilentlyContinue
+pnpm test:e2e:compose
+```
+
+In a POSIX shell, run:
+
+```sh
+env -u WATCHNEXT_PICKER_UI_ONLY -u WATCHNEXT_PICKER_EXACT_ONLY pnpm test:e2e:compose
+```
+
+These variables are only for focused diagnostics and skip the rest of the full
+two-session scenario.
+
 The command builds the current checkout using `docker-compose.yaml`, starts an
 isolated Compose project on a free loopback port, and exercises the real app
 with two separate browser contexts and a fresh PostgreSQL volume. It registers

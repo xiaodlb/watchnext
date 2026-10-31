@@ -450,8 +450,14 @@ try {
   if (await exactResult.getByRole("heading", { name: exactTitle, exact: true }).count() !== 1) {
     throw new Error(`Picker returned an unexpected exact-tier result: ${(await exactResult.innerText()).slice(0, 240)}`);
   }
-  await exactResult.getByText(/Movie · 18 min · Next:/).waitFor();
-  await exactResult.getByText("Matches your mood and fits your available time.", { exact: true }).waitFor();
+  stage = "checking exact-match movie runtime summary";
+  const runtimeSummary = exactResult.getByText(/Movie · 18 min · Next:/);
+  try { await runtimeSummary.waitFor({ state: "visible" }); }
+  catch { throw new Error(`The exact-match movie runtime summary was not visible (matching elements=${await runtimeSummary.count().catch(() => 0)}).`); }
+  stage = "checking exact-match explanation";
+  const exactExplanation = exactResult.getByText("Matches your mood and fits your available time.", { exact: true });
+  try { await exactExplanation.waitFor({ state: "visible" }); }
+  catch { throw new Error(`The exact-match explanation was not visible (matching elements=${await exactExplanation.count().catch(() => 0)}).`); }
   if (await exactResult.getByText(overBudgetTitle, { exact: true }).count()) throw new Error("An over-budget title was suggested while an exact match existed.");
 
   stage = "checking the inclusive five-minute over-budget fallback";
