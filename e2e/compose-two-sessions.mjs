@@ -326,9 +326,10 @@ try {
     await addTitle(owner, pickerTitle, { minutes: 18, mood: "Funny" });
     await pick(owner, { viewers: ["You", `guest_${suffix}`], minutes: 20, mood: "Funny", scenario: "exact match", expectedTitle: pickerTitle });
     const noMatchVisible = await pageNoMatchVisible(owner);
-    console.log(`DIAG: exact-picker ${lastPickerProbe} no-match-visible=${noMatchVisible}`);
     const exactVisible = await owner.getByRole("heading", { name: pickerTitle, exact: true }).isVisible().catch(() => false);
-    if (!exactVisible) throw new Error("Exact-picker recommendation was not visibly rendered.");
+    console.log(`DIAG: exact-picker ${lastPickerProbe} no-match-visible=${noMatchVisible} exact-visible=${exactVisible}`);
+    if (noMatchVisible) throw new Error(`Exact-picker returned an explicit no-match despite an eligible fixture (${lastPickerProbe}).`);
+    if (!exactVisible) throw new Error(`Exact-picker did not render its expected title (${lastPickerProbe}).`);
     console.log("PASS: exact-picker recommendation was visibly rendered.");
   } else {
   stage = "registering and signing in the second account";

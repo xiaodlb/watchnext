@@ -99,6 +99,30 @@ async function waitReady(origin) {
   }
   throw new Error("Application did not become ready after PostgreSQL recovery.");
 }
+async function waitAuthenticatedLibrary(page) {
+  const deadline = Date.now() + 60000;
+  let lastStatus = "unavailable", lastCode = "none";
+  while (Date.now() < deadline) {
+    checkInterrupted();
+    const result = await page.evaluate(async () => {
+      try {
+        const response = await fetch("/v1/library", { cache: "no-store" });
+        let body = null;
+        try { body = await response.json(); } catch {}
+        const candidate = body?.error?.code;
+        const code = ["service_unavailable", "validation_failed", "conflict"].includes(candidate)
+          ? candidate
+          : typeof candidate === "string" ? "other" : "none";
+        return { status: response.status, code };
+      } catch { return { status: 0, code: "network" }; }
+    });
+    lastStatus = result.status === 0 ? "network-error" : String(result.status);
+    lastCode = result.code;
+    if (result.status === 200) return;
+    await new Promise(resolveWait => setTimeout(resolveWait, 400));
+  }
+  throw new Error(`Authenticated library API did not recover (HTTP ${lastStatus}; code=${lastCode}).`);
+}
 async function createAccount(page, username) {
   await page.goto(origin);
   await page.getByRole("tab", { name: "Create account", exact: true }).click();
@@ -243,6 +267,9 @@ try {
   assertOwnedVolumeExists();
   await waitReady(origin);
   checkInterrupted();
+
+  stage = "waiting for the authenticated library API after recovery";
+  await waitAuthenticatedLibrary(page);
 
   stage = "verifying saved data and the rejected title after recovery";
   await assertWatchlistTitle(page, groupName, firstTitle, true);
