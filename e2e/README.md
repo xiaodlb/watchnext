@@ -93,3 +93,22 @@ By default the command builds the current checkout. To skip building, set
 `WATCHNEXT_E2E_IMAGE` to a local image that contains the exact application code
 under test; the command fails if that image is missing. The restart always uses
 the same image and the same project-owned PostgreSQL volume.
+## Group access isolation
+
+```sh
+pnpm test:e2e:isolation
+```
+
+This check creates two independent accounts, each with a separate group and a
+unique title, in an isolated Compose project. It verifies that each account can
+see its own group and title, while the other group's name and title remain
+absent from the group workspace, watchlist and `GET /v1/library`. It also opens
+the other account's title URL directly and requests `GET /v1/library/{id}`;
+neither response may expose the foreign title. The test uses separate browser
+contexts, blocks requests outside the test app, generates synthetic data, and
+removes only its verified Compose resources. It retains no credentials,
+recovery codes, cookies or invitation URLs.
+
+By default the command builds the current checkout. To skip the build, set
+`WATCHNEXT_E2E_IMAGE` to an already built image for the exact product source
+being tested. The command checks that image exists and never pulls or retags it.
