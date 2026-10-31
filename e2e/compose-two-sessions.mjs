@@ -39,6 +39,18 @@ function docker(args, timeout = 30000, allowFailure = false) {
 }
 function compose(args, timeout = 30000, allowFailure = false) { return docker([...composeArgs, ...args], timeout, allowFailure); }
 function dockerLines(args) { return docker(args).stdout.trim().split(/\r?\n/).filter(Boolean); }
+function safePickerLogCategories() {
+  const result = compose(["logs", "--no-color", "--tail", "120", "app"], 30000, true);
+  const text = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
+  const categories = [
+    ["type-error", /\bTypeError\b/i],
+    ["bigint-serialization", /BigInt.{0,80}(?:serializ|JSON)|(?:serializ|JSON).{0,80}BigInt/i],
+    ["prisma-error", /Prisma(?:Client)?(?:KnownRequestError|UnknownRequestError|ValidationError|InitializationError)/i],
+    ["serialization-error", /circular structure|circular reference|serialization error|serialize to JSON/i],
+    ["framework-exception", /\b(?:ReferenceError|RangeError|SyntaxError)\b/i],
+  ];
+  return categories.filter(([, pattern]) => pattern.test(text)).map(([name]) => name).join(",") || "none-recognized";
+}
 async function freePort() {
   return await new Promise((resolvePort, reject) => {
     const server = createServer();
@@ -110,6 +122,23 @@ async function pick(page, { viewers, minutes, mood }) {
   const moodGroup = page.getByRole("group", { name: "What's the mood?" });
   await moodGroup.getByRole("button", { name: mood, exact: true }).click();
   stage = "submitting picker request";
+  const pickerResponse = page.waitForResponse(response => {
+    if (response.request().method() !== "POST") return false;
+    const path = new URL(response.url()).pathname;
+    return path === "/v1/picker/pick" || /^\/v1\/picker\/cycles\/[^/]+\/next$/.test(path);
+  }).then(async response => {
+    const url = new URL(response.url());
+    const path = url.pathname === "/v1/picker/pick" ? url.pathname : "/v1/picker/cycles/:id/next";
+    let code = "none";
+    try {
+      const body = await response.json();
+      const candidate = body?.error?.code;
+      if (typeof candidate === "string" && /^[a-z0-9_-]{1,48}$/i.test(candidate)) code = candidate;
+    } catch { code = "non-json"; }
+    const status = response.status();
+    const category = status >= 500 ? "server-error" : status >= 400 ? "request-error" : "success";
+    return `HTTP ${status} ${path} category=${category} code=${code}`;
+  }).catch(() => "picker HTTP response unavailable");
   await page.getByRole("button", { name: "Pick something", exact: true }).click();
   stage = "waiting for picker result";
   const result = page.locator('[aria-live="polite"] section');
@@ -119,7 +148,9 @@ async function pick(page, { viewers, minutes, mood }) {
     requestError.waitFor().then(() => "request error"),
   ]);
   if (outcome === "request error" || await requestError.isVisible()) {
-    throw new Error("Picker showed the request-error alert instead of a recommendation.");
+    const diagnostic = await pickerResponse;
+    const logSignals = diagnostic.includes("category=server-error") ? `; isolated-app-log-categories=${safePickerLogCategories()}` : "";
+    throw new Error(`Picker showed the request-error alert instead of a recommendation (${diagnostic}${logSignals}).`);
   }
   return result;
 }
