@@ -47,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const refreshSequence = useRef(0);
 
   const adopt = useCallback((next?: SessionContext) => {
     if (next && typeof next.revision === "number") {
@@ -75,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [adopt]);
 
   const refresh = useCallback(async () => {
+    const sequence = ++refreshSequence.current;
     setError(null);
     try {
       // A context change can race either request (for example, when a group is
@@ -84,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // the latest context a few times instead.
       for (let attempt = 0; attempt < 3; attempt++) {
         const session = await request("context");
+        if (sequence !== refreshSequence.current) return;
         const nextContext = session.context as SessionContext;
         if (!sameContext(contextRef.current, nextContext)) continue;
         if (nextContext.mode === "anonymous") {
@@ -94,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const nextWorkspace = await request("groups/current");
+        if (sequence !== refreshSequence.current) return;
         if (!sameContext(nextWorkspace.context, contextRef.current) || !sameContext(nextContext, contextRef.current)) continue;
 
         setUser(session.account?.username ?? null);
@@ -104,9 +108,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       throw new Error("The group workspace changed while it was loading. Please try again.");
     } catch (cause) {
+      if (sequence !== refreshSequence.current) return;
       setError(cause instanceof Error ? cause.message : "Unable to connect to WatchNext.");
       throw cause;
-    } finally { setLoading(false); }
+    } finally { if (sequence === refreshSequence.current) setLoading(false); }
   }, [request, adopt]);
 
   useEffect(() => { void refresh().catch(() => {}); }, [refresh]);
