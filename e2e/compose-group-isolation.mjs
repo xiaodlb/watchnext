@@ -159,6 +159,7 @@ async function assertOwnWorkspace(page, ownGroup, ownTitle, ownUsername, foreign
 }
 
 let origin = "", foreignTitleId = "", failed = false;
+const membershipDiagnostics = {};
 let owner, guest;
 const suffix = randomBytes(5).toString("hex");
 const ownerName = `isolation_a_${suffix}`, guestName = `isolation_b_${suffix}`;
@@ -232,8 +233,17 @@ try {
   if (laterContext.status !== 200) throw new Error("Later account context request failed.");
   const later = JSON.parse(laterContext.text);
   const laterMember = Array.isArray(later.account?.memberships) && later.account.memberships.includes(ownerGroupId);
-  console.log(`Own-group membership after other account activity: ${laterMember}`);
+  membershipDiagnostics.contextOwnGroup = laterMember;
+  console.log(`Own-group membership in account context after other account activity: ${laterMember}`);
   if (!laterMember) throw new Error("Own-group membership missing after other account activity.");
+
+  const laterWorkspace = await apiGet(owner, "/v1/groups/current");
+  const workspace = laterWorkspace.status === 200 ? JSON.parse(laterWorkspace.text) : null;
+  const workspaceOwnGroup = Array.isArray(workspace?.memberships) && workspace.memberships.some(group => group.id === ownerGroupId);
+  membershipDiagnostics.groupsCurrentOwnGroup = workspaceOwnGroup;
+  membershipDiagnostics.groupsCurrentStatusOk = laterWorkspace.status === 200;
+  console.log(`Own-group membership in groups/current after other account activity: ${workspaceOwnGroup}`);
+  if (!workspaceOwnGroup) throw new Error("Own-group membership missing from groups/current after other account activity.");
 
   await assertOwnWorkspace(owner, ownerGroup, ownerTitle, ownerName, guestGroup, guestTitle);
   foreignTitleId = ownerTitleId;
@@ -242,7 +252,7 @@ try {
 } catch (error) {
   failed = true;
   const detail = error instanceof Error && error.message.startsWith("Workspace visibility flags:") ? ` ${error.message}` : "";
-  console.error(`FAIL: ${stage} (${error instanceof Error ? error.name : "Error"}).${detail}`);
+  console.error(`FAIL: ${stage} (${error instanceof Error ? error.name : "Error"}).${detail} Membership checks: ${JSON.stringify(membershipDiagnostics)}.`);
 } finally {
   await browser?.close().catch(() => { failed = true; });
   if (started) {

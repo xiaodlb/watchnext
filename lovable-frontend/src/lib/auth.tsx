@@ -35,6 +35,9 @@ type Auth = {
 
 const anonymous: SessionContext = { revision: 0, mode: "anonymous", groupId: null };
 const AuthContext = createContext<Auth | null>(null);
+function sameContext(a?: SessionContext, b?: SessionContext) {
+  return Boolean(a && b && a.revision === b.revision && a.mode === b.mode && a.groupId === b.groupId);
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [context, setContext] = useState<SessionContext>(anonymous);
@@ -74,18 +77,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setError(null);
     try {
-      const session = await request("context");
-      const nextContext = session.context as SessionContext;
-      const current = contextRef.current;
-      if (current.revision !== nextContext.revision || current.mode !== nextContext.mode || current.groupId !== nextContext.groupId) return;
-      setUser(session.account?.username ?? null);
-      setAccountId(session.account?.id ?? null);
-      if (nextContext.mode !== "anonymous") {
-        const current = await request("groups/current");
-        if (current.context?.revision !== contextRef.current.revision || current.context?.groupId !== contextRef.current.groupId || current.context?.mode !== contextRef.current.mode) return;
-        setWorkspace(current);
-        if (nextContext.mode === "legacy") setUser(current.members.find((m: { id: string }) => m.id === current.profileId)?.name ?? null);
-      } else setWorkspace(null);
+      // A context change can race either request (for example, when a group is
+      // selected while an older workspace fetch is in flight). Discarding that
+      // response is correct, but returning silently leaves the authenticated
+      // UI without its workspace until another refresh happens. Retry against
+      // the latest context a few times instead.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const session = await request("context");
+        const nextContext = session.context as SessionContext;
+        if (!sameContext(contextRef.current, nextContext)) continue;
+        if (nextContext.mode === "anonymous") {
+          setUser(null);
+          setAccountId(null);
+          setWorkspace(null);
+          return;
+        }
+
+        const nextWorkspace = await request("groups/current");
+        if (!sameContext(nextWorkspace.context, contextRef.current) || !sameContext(nextContext, contextRef.current)) continue;
+
+        setUser(session.account?.username ?? null);
+        setAccountId(session.account?.id ?? null);
+        setWorkspace(nextWorkspace);
+        if (nextContext.mode === "legacy") setUser(nextWorkspace.members.find((m: { id: string }) => m.id === nextWorkspace.profileId)?.name ?? null);
+        return;
+      }
+      throw new Error("The group workspace changed while it was loading. Please try again.");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to connect to WatchNext.");
       throw cause;
