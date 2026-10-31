@@ -25,6 +25,7 @@ env.YOUTUBE_API_KEY = "";
 env.KINOPOISK_UNOFFICIAL_API_KEY = "";
 
 let stage = "setup", started = false, browser, interrupted = false;
+let lastPickerProbe = "picker response unavailable";
 const composeArgs = ["compose", "--project-name", project, "--project-directory", root, "--env-file", envFile, "-f", join(root, "docker-compose.yaml")];
 for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => {
   interrupted = true;
@@ -105,7 +106,11 @@ async function saveProgress(page, titleUrl, value) {
   await page.getByText("Saved", { exact: true }).waitFor();
 }
 
-async function pick(page, { viewers, minutes, mood }) {
+async function pageNoMatchVisible(page) {
+  return page.getByText("No saved item matches these viewers and the permitted time/mood tiers. Keep your inputs or adjust them explicitly.", { exact: true }).isVisible().catch(() => false);
+}
+
+async function pick(page, { viewers, minutes, mood, scenario, expectedTitle }) {
   stage = "opening picker controls";
   await page.goto(`${origin}/pick`);
   stage = "selecting picker viewers";
@@ -129,34 +134,69 @@ async function pick(page, { viewers, minutes, mood }) {
   }).then(async response => {
     const url = new URL(response.url());
     const path = url.pathname === "/v1/picker/pick" ? url.pathname : "/v1/picker/cycles/:id/next";
-    let codeCategory = "none";
-    const contentType = response.headers()["content-type"]?.split(";", 1)[0] ?? "missing";
+    let kind = "missing";
+    let code = "none";
+    let titleMatches = "n/a", moodMatches = "n/a", withinBudget = "n/a";
+    const rawContentType = response.headers()["content-type"]?.split(";", 1)[0] ?? "missing";
+    const contentType = ["application/json", "text/plain"].includes(rawContentType) ? rawContentType : rawContentType === "missing" ? "missing" : "other";
     try {
       const body = await response.json();
+      kind = ["picked", "no_match", "exhausted"].includes(body?.kind) ? body.kind : typeof body?.kind === "string" ? "other" : "missing";
       const candidate = body?.error?.code;
-      if (candidate === "validation_failed") codeCategory = "validation";
-      else if (candidate === "service_unavailable") codeCategory = "service-unavailable";
-      else if (candidate === "conflict") codeCategory = "conflict";
-      else if (typeof candidate === "string") codeCategory = "other-api-error";
-    } catch { codeCategory = "non-json"; }
+      if (["validation_failed", "service_unavailable", "conflict"].includes(candidate)) code = candidate;
+      else if (typeof candidate === "string") code = "other";
+      if (expectedTitle) {
+        titleMatches = String(body?.candidate?.title === expectedTitle);
+        withinBudget = String(Number.isFinite(body?.candidate?.durationSeconds) && body.candidate.durationSeconds <= minutes * 60);
+        moodMatches = "false";
+        if (typeof body?.candidate?.id === "string") {
+          moodMatches = String(await page.evaluate(async ({ candidateId, requestedMood }) => {
+            try {
+              const response = await fetch("/v1/library", { cache: "no-store" });
+              const library = await response.json();
+              const candidate = library.items?.find(item => item.id === candidateId);
+              return Array.isArray(candidate?.moods) && candidate.moods.includes(requestedMood.toLowerCase());
+            } catch { return false; }
+          }, { candidateId: body.candidate.id, requestedMood: mood }));
+        }
+      }
+    } catch { kind = "non-json"; }
     const status = response.status();
     const category = status >= 500 ? "server-error" : status >= 400 ? "request-error" : "success";
-    return `HTTP ${status} ${path} content-type=${contentType} category=${category} error-code-category=${codeCategory}`;
+    lastPickerProbe = `HTTP ${status} ${path} content-type=${contentType} category=${category} kind=${kind} error-code=${code} title-matches=${titleMatches} mood-matches=${moodMatches} within-budget=${withinBudget}`;
+    return lastPickerProbe;
   }).catch(() => "picker HTTP response unavailable");
   await page.getByRole("button", { name: "Pick something", exact: true }).click();
-  stage = "waiting for picker result";
-  const result = page.locator('[aria-live="polite"] section');
+  stage = `waiting for picker result (${scenario})`;
+  const result = page.locator('[aria-live="polite"] section').filter({ has: page.getByText("Tonight's pick", { exact: true }) });
+  const noMatch = page.getByText("No saved item matches these viewers and the permitted time/mood tiers. Keep your inputs or adjust them explicitly.", { exact: true });
   const alert = page.locator("main [role=alert]").filter({ hasText: /\S/ }).first();
-  const outcome = await Promise.race([
-    result.waitFor({ state: "visible" }).then(() => "recommendation"),
-    alert.waitFor({ state: "visible" }).then(() => "alert"),
-  ]);
-  if (outcome !== "recommendation") {
+  try {
+    await page.waitForFunction(() => {
+      const visible = (element) => {
+        const style = getComputedStyle(element);
+        return style.display !== "none" && style.visibility !== "hidden" && element.getClientRects().length > 0;
+      };
+      const hasAlert = [...document.querySelectorAll("main [role=alert]")].some(element => element.textContent?.trim() && visible(element));
+      const hasNoMatch = document.body.innerText.includes("No saved item matches these viewers and the permitted time/mood tiers. Keep your inputs or adjust them explicitly.");
+      const hasResult = [...document.querySelectorAll('[aria-live="polite"] section')].some(section => visible(section) && section.textContent?.includes("Tonight's pick"));
+      return hasAlert || hasNoMatch || hasResult;
+    }, null, { timeout: 30000 });
+  } catch {
+    const resultCount = await result.count().catch(() => 0);
+    const noMatchCount = await noMatch.count().catch(() => 0);
+    const alertVisible = await alert.isVisible().catch(() => false);
     const buttonEnabled = await page.getByRole("button", { name: "Pick something", exact: true }).isEnabled().catch(() => false);
     const diagnostic = await Promise.race([pickerResponse, new Promise(resolveDiagnostic => setTimeout(() => resolveDiagnostic("picker HTTP response unavailable"), 2500))]);
-    const logSignals = diagnostic.includes("category=server-error") ? `; isolated-app-log-categories=${safePickerLogCategories()}` : "";
-    throw new Error(`Picker produced a visible alert instead of a recommendation (button-enabled=${buttonEnabled}; ${diagnostic}${logSignals}).`);
+    throw new Error(`Picker timed out (${scenario}; result-section-count=${resultCount}; no-match-count=${noMatchCount}; alert-visible=${alertVisible}; button-enabled=${buttonEnabled}; ${diagnostic}).`);
   }
+  if (await alert.isVisible().catch(() => false)) {
+    const buttonEnabled = await page.getByRole("button", { name: "Pick something", exact: true }).isEnabled().catch(() => false);
+    const diagnostic = await Promise.race([pickerResponse, new Promise(resolveDiagnostic => setTimeout(() => resolveDiagnostic("picker HTTP response unavailable"), 2500))]);
+    throw new Error(`Picker showed an alert (${scenario}; button-enabled=${buttonEnabled}; ${diagnostic}).`);
+  }
+  await Promise.race([pickerResponse, new Promise(resolveDiagnostic => setTimeout(resolveDiagnostic, 2500))]);
+  if (await noMatch.isVisible().catch(() => false)) return result;
   return result;
 }
 async function assertWatchlistEntry(page, title, contributors, visibleNames) {
@@ -271,9 +311,25 @@ try {
     stage = "adding the picker-only synthetic title";
     const pickerTitle = `Picker UI probe ${suffix}`;
     await addTitle(owner, pickerTitle, { minutes: 18, mood: "Funny" });
-    const recommendation = await pick(owner, { viewers: ["You"], minutes: 20, mood: "Funny" });
+    const recommendation = await pick(owner, { viewers: ["You"], minutes: 20, mood: "Funny", scenario: "focused exact match" });
     await recommendation.getByRole("heading", { name: pickerTitle, exact: true }).waitFor({ state: "visible" });
     console.log("PASS: picker recommendation was visibly rendered in the browser.");
+  } else if (process.env.WATCHNEXT_PICKER_EXACT_ONLY === "1") {
+    stage = "registering and joining the second account for the exact-picker probe";
+    await register(guest, `guest_${suffix}`, true);
+    await guest.goto(invite);
+    await guest.getByRole("button", { name: "Open invitation" }).click();
+    await guest.getByRole("button", { name: "Join group" }).click();
+    await guest.getByRole("heading", { name: groupName }).waitFor();
+    stage = "adding one exact-picker fixture";
+    const pickerTitle = `Picker exact Funny ${suffix}`;
+    await addTitle(owner, pickerTitle, { minutes: 18, mood: "Funny" });
+    await pick(owner, { viewers: ["You", `guest_${suffix}`], minutes: 20, mood: "Funny", scenario: "exact match", expectedTitle: pickerTitle });
+    const noMatchVisible = await pageNoMatchVisible(owner);
+    console.log(`DIAG: exact-picker ${lastPickerProbe} no-match-visible=${noMatchVisible}`);
+    const exactVisible = await owner.getByRole("heading", { name: pickerTitle, exact: true }).isVisible().catch(() => false);
+    if (!exactVisible) throw new Error("Exact-picker recommendation was not visibly rendered.");
+    console.log("PASS: exact-picker recommendation was visibly rendered.");
   } else {
   stage = "registering and signing in the second account";
   await register(guest, `guest_${suffix}`, true);
@@ -389,7 +445,7 @@ try {
   await addTitle(owner, tooLongTitle, { minutes: 26, mood: "Exciting" });
 
   stage = "checking exact mood and time match takes priority";
-  const exactResult = await pick(owner, { viewers: ["You", guestName], minutes: 20, mood: "Funny" });
+  const exactResult = await pick(owner, { viewers: ["You", guestName], minutes: 20, mood: "Funny", scenario: "exact match" });
   if (await exactResult.getByRole("heading", { name: exactTitle, exact: true }).count() !== 1) {
     throw new Error(`Picker returned an unexpected exact-tier result: ${(await exactResult.innerText()).slice(0, 240)}`);
   }
@@ -398,7 +454,7 @@ try {
   if (await exactResult.getByText(overBudgetTitle, { exact: true }).count()) throw new Error("An over-budget title was suggested while an exact match existed.");
 
   stage = "checking the inclusive five-minute over-budget fallback";
-  const overResult = await pick(owner, { viewers: ["You", guestName], minutes: 20, mood: "Exciting" });
+  const overResult = await pick(owner, { viewers: ["You", guestName], minutes: 20, mood: "Exciting", scenario: "over-budget fallback" });
   if (await overResult.getByRole("heading", { name: fallbackTitle, exact: true }).count() !== 1) {
     throw new Error(`Picker returned an unexpected over-budget-tier result: ${(await overResult.innerText()).slice(0, 240)}`);
   }
@@ -415,22 +471,22 @@ try {
   const longMovieUrl = await addTitle(owner, longMovieTitle, { minutes: 25, mood: "Emotional" });
   await saveProgress(owner, longMovieUrl, "0:23:00");
 
-  const moodFallbackResult = await pick(owner, { viewers: ["You", guestName], minutes: 20, mood: "Dark" });
+  const moodFallbackResult = await pick(owner, { viewers: ["You", guestName], minutes: 20, mood: "Dark", scenario: "different-mood fallback" });
   await moodFallbackResult.getByRole("heading", { name: differentMoodTitle, exact: true }).waitFor();
   await moodFallbackResult.getByText("Requested Dark; different mood: Relaxing. Within your available time.", { exact: true }).waitFor();
 
   stage = "checking full movie runtime despite saved progress";
-  await pick(owner, { viewers: ["You"], minutes: 6, mood: "Emotional" });
+  await pick(owner, { viewers: ["You"], minutes: 6, mood: "Emotional", scenario: "full movie duration exclusion" });
   await owner.getByText("No saved item matches these viewers and the permitted time/mood tiers. Keep your inputs or adjust them explicitly.", { exact: true }).waitFor();
   if (await owner.getByRole("heading", { name: longMovieTitle, exact: true }).count()) throw new Error("Movie progress was subtracted from its full runtime during picking.");
 
   stage = "checking one next episode and its typical runtime";
-  const episodeResult = await pick(owner, { viewers: ["You"], minutes: 45, mood: "Dark" });
+  const episodeResult = await pick(owner, { viewers: ["You"], minutes: 45, mood: "Dark", scenario: "typical episode match" });
   await episodeResult.getByRole("heading", { name: animeTitle, exact: true }).waitFor();
   await episodeResult.getByText("Anime · 42 min episode · Next: E5", { exact: true }).waitFor();
 
   stage = "checking no-match behavior without relaxing inputs";
-  await pick(owner, { viewers: ["You", guestName], minutes: 1, mood: "Dark" });
+  await pick(owner, { viewers: ["You", guestName], minutes: 1, mood: "Dark", scenario: "no-match boundary" });
   await owner.getByText("No saved item matches these viewers and the permitted time/mood tiers. Keep your inputs or adjust them explicitly.", { exact: true }).waitFor();
   if (await owner.getByText("Tonight's pick", { exact: true }).count()) throw new Error("The picker showed a suggestion when no permitted match existed.");
 
