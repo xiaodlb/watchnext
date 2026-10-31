@@ -7,6 +7,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { AuthError } from "../accounts/security";
 import { rankCandidates } from "../picker/ranking";
+import { rankingCreatedAt } from "./ranking-date";
 import { PrismaLibraryError, PrismaLibraryRepository, type LibraryDraft, type PersonalPatch } from "./library-store";
 import { prismaIdentityClient, verifyPrismaIdentityAdapter } from "./identity-store";
 import { handlePrismaIdentity } from "./identity-service";
@@ -108,7 +109,7 @@ async function picker(c: Context, value: Input, next?: { id: string; step: strin
   const db = prismaIdentityClient();
   const members: any[] = c.mode === "account" ? await db.member.findMany({ where: { groupId: c.groupId, accountMembership: { is: { status: "active" } } } }) : await db.member.findMany({ where: { groupId: c.groupId } });
   const titles: any[] = await db.title.findMany({ where: { groupId: c.groupId }, include: { titleMoods: true, progress: true } });
-  const ranked = rankCandidates({ groupId: c.groupId, members: members.map(m => ({ id: m.id, groupId: c.groupId })), titles: titles.map(t => ({ id: t.id, groupId: t.groupId, archived: t.archived, title: t.title, contentType: t.contentType, durationSeconds: t.durationSeconds, numberingStyle: t.numberingStyle, moods: t.titleMoods.map((m: any) => m.moodCode), createdAt: t.createdAt })), progress: titles.flatMap(t => t.progress.map((p: any) => ({ titleId: t.id, memberId: p.memberId, groupId: t.groupId, numberingStyle: p.numberingStyle, completed: p.completed, positionState: p.positionState, nextSeason: p.nextSeason, nextEpisode: p.nextEpisode }))), selectedViewerIds: value.viewerIds as string[], availableMinutes: value.availableMinutes as number, mood: value.mood as any, rewatches: value.rewatches });
+  const ranked = rankCandidates({ groupId: c.groupId, members: members.map(m => ({ id: m.id, groupId: c.groupId })), titles: titles.map(t => ({ id: t.id, groupId: c.groupId, archived: t.archived, title: t.title, contentType: t.contentType, durationSeconds: t.durationSeconds, numberingStyle: t.numberingStyle, moods: t.titleMoods.map((m: any) => m.moodCode), createdAt: rankingCreatedAt(t.createdAt) })), progress: titles.flatMap(t => t.progress.map((p: any) => ({ titleId: t.id, memberId: p.memberId, groupId: t.groupId, numberingStyle: p.numberingStyle, completed: p.completed, positionState: p.positionState, nextSeason: p.nextSeason, nextEpisode: p.nextEpisode }))), selectedViewerIds: value.viewerIds as string[], availableMinutes: value.availableMinutes as number, mood: value.mood as any, rewatches: value.rewatches });
   if (ranked.kind === "ranked") {
     const signature = hash(JSON.stringify(ranked.candidates));
     const previous = next && pickerCycles.get(next.id);

@@ -73,16 +73,55 @@ async function register(page, username, loginAfter) {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await page.getByRole("heading", { name: "Your groups" }).waitFor();
 }
-async function addTitle(page, title, { youtube = false, confirmDuplicate = false } = {}) {
+async function addTitle(page, title, { youtube = false, confirmDuplicate = false, kind = youtube ? "YouTube" : "Movie", minutes = 25, mood = "Funny", watchUrl = youtube ? "https://www.youtube.com/watch?v=dQw4w9WgXcQ" : "" } = {}) {
   await page.goto(`${origin}/add`);
-  if (youtube) await page.getByRole("button", { name: "YouTube video", exact: true }).click();
-  if (youtube) await page.getByLabel("Watch link", { exact: false }).fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+  if (kind !== "Movie") await page.getByRole("button", { name: kind === "YouTube" ? "YouTube video" : kind, exact: true }).click();
+  if (kind === "YouTube" || watchUrl) await page.getByLabel("Watch link", { exact: false }).fill(watchUrl);
   await page.getByLabel("Title", { exact: true }).fill(title);
-  await page.getByLabel("Runtime (min)", { exact: true }).fill("25");
-  await page.getByRole("button", { name: "Funny", exact: true }).click();
+  await page.getByLabel(kind === "Series" || kind === "Anime" ? "Typical episode length (min)" : "Runtime (min)", { exact: true }).fill(String(minutes));
+  await page.getByRole("button", { name: mood, exact: true }).click();
   if (confirmDuplicate) page.once("dialog", dialog => { void dialog.accept(); });
   await page.getByRole("button", { name: "Save to list", exact: true }).click();
   await page.getByRole("heading", { name: title, exact: true }).waitFor();
+  return page.url();
+}
+
+async function saveProgress(page, titleUrl, value) {
+  await page.goto(titleUrl);
+  await page.getByLabel(/Stopped at \(H:MM:SS\)|Next episode to watch/).fill(value);
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByText("Saved", { exact: true }).waitFor();
+}
+
+async function pick(page, { viewers, minutes, mood }) {
+  stage = "opening picker controls";
+  await page.goto(`${origin}/pick`);
+  stage = "selecting picker viewers";
+  const viewerGroup = page.getByRole("group", { name: "Who's watching?" });
+  for (const viewer of viewers) {
+    const button = viewer === "You"
+      ? viewerGroup.getByRole("button").filter({ hasText: "You" })
+      : viewerGroup.getByRole("button", { name: new RegExp(viewer) });
+    await button.click();
+  }
+  stage = "setting picker time";
+  await page.getByLabel("Minutes available").fill(String(minutes));
+  stage = "setting picker mood";
+  const moodGroup = page.getByRole("group", { name: "What's the mood?" });
+  await moodGroup.getByRole("button", { name: mood, exact: true }).click();
+  stage = "submitting picker request";
+  await page.getByRole("button", { name: "Pick something", exact: true }).click();
+  stage = "waiting for picker result";
+  const result = page.locator('[aria-live="polite"] section');
+  const requestError = page.getByRole("alert").filter({ hasText: "The request could not be completed." });
+  const outcome = await Promise.race([
+    result.waitFor().then(() => "recommendation"),
+    requestError.waitFor().then(() => "request error"),
+  ]);
+  if (outcome === "request error" || await requestError.isVisible()) {
+    throw new Error("Picker showed the request-error alert instead of a recommendation.");
+  }
+  return result;
 }
 async function assertWatchlistEntry(page, title, contributors, visibleNames) {
   await page.goto(`${origin}/watchlist`);
@@ -257,7 +296,66 @@ try {
   await guestGroup.getByText(ownerNote, { exact: true }).waitFor();
   if (await guest.locator("body").innerText().then(text => text.includes("0:12:34"))) throw new Error("The owner's private progress appeared in the guest's view.");
 
-  console.log("PASS: two-way title sharing and contributor attribution, duplicate YouTube link consolidation, independent personal progress, and group-visible attributed ratings and notes.");
+  stage = "adding exact-match and competing picker movie fixtures";
+  const exactTitle = `Picker exact Funny ${suffix}`;
+  const exactUrl = await addTitle(owner, exactTitle, { minutes: 18, mood: "Funny" });
+  await saveProgress(owner, exactUrl, "0:16:00");
+  const overBudgetTitle = `Picker exact-mode over-budget Funny ${suffix}`;
+  await addTitle(owner, overBudgetTitle, { minutes: 21, mood: "Funny" });
+  const differentMoodTitle = `Picker in-budget Relaxing ${suffix}`;
+  await addTitle(owner, differentMoodTitle, { minutes: 20, mood: "Relaxing" });
+  const fallbackTitle = `Picker boundary Exciting ${suffix}`;
+  await addTitle(owner, fallbackTitle, { minutes: 25, mood: "Exciting" });
+  const tooLongTitle = `Picker beyond-boundary Exciting ${suffix}`;
+  await addTitle(owner, tooLongTitle, { minutes: 26, mood: "Exciting" });
+
+  stage = "checking exact mood and time match takes priority";
+  const exactResult = await pick(owner, { viewers: ["You", guestName], minutes: 20, mood: "Funny" });
+  if (await exactResult.getByRole("heading", { name: exactTitle, exact: true }).count() !== 1) {
+    throw new Error(`Picker returned an unexpected exact-tier result: ${(await exactResult.innerText()).slice(0, 240)}`);
+  }
+  await exactResult.getByText(/Movie · 18 min · Next:/).waitFor();
+  await exactResult.getByText("Matches your mood and fits your available time.", { exact: true }).waitFor();
+  if (await exactResult.getByText(overBudgetTitle, { exact: true }).count()) throw new Error("An over-budget title was suggested while an exact match existed.");
+
+  stage = "checking the inclusive five-minute over-budget fallback";
+  const overResult = await pick(owner, { viewers: ["You", guestName], minutes: 20, mood: "Exciting" });
+  if (await overResult.getByRole("heading", { name: fallbackTitle, exact: true }).count() !== 1) {
+    throw new Error(`Picker returned an unexpected over-budget-tier result: ${(await overResult.innerText()).slice(0, 240)}`);
+  }
+  await overResult.getByText("Movie · 25 min", { exact: true }).waitFor();
+  await overResult.getByText("5 minutes longer than your available time.", { exact: true }).waitFor();
+  if (await overResult.getByText(tooLongTitle, { exact: true }).count()) throw new Error("A title more than five minutes over budget was suggested.");
+
+  stage = "checking disclosed different-mood fallback";
+  stage = "adding episodic and long-progress movie fixtures";
+  const animeTitle = `Picker typical episode Anime ${suffix}`;
+  const animeUrl = await addTitle(owner, animeTitle, { kind: "Anime", minutes: 42, mood: "Dark" });
+  await saveProgress(owner, animeUrl, "E5");
+  const longMovieTitle = `Picker movie full runtime ${suffix}`;
+  const longMovieUrl = await addTitle(owner, longMovieTitle, { minutes: 25, mood: "Emotional" });
+  await saveProgress(owner, longMovieUrl, "0:23:00");
+
+  const moodFallbackResult = await pick(owner, { viewers: ["You", guestName], minutes: 20, mood: "Dark" });
+  await moodFallbackResult.getByRole("heading", { name: differentMoodTitle, exact: true }).waitFor();
+  await moodFallbackResult.getByText("Requested Dark; different mood: Relaxing. Within your available time.", { exact: true }).waitFor();
+
+  stage = "checking full movie runtime despite saved progress";
+  await pick(owner, { viewers: ["You"], minutes: 6, mood: "Emotional" });
+  await owner.getByText("No saved item matches these viewers and the permitted time/mood tiers. Keep your inputs or adjust them explicitly.", { exact: true }).waitFor();
+  if (await owner.getByRole("heading", { name: longMovieTitle, exact: true }).count()) throw new Error("Movie progress was subtracted from its full runtime during picking.");
+
+  stage = "checking one next episode and its typical runtime";
+  const episodeResult = await pick(owner, { viewers: ["You"], minutes: 45, mood: "Dark" });
+  await episodeResult.getByRole("heading", { name: animeTitle, exact: true }).waitFor();
+  await episodeResult.getByText("Anime · 42 min episode · Next: E5", { exact: true }).waitFor();
+
+  stage = "checking no-match behavior without relaxing inputs";
+  await pick(owner, { viewers: ["You", guestName], minutes: 1, mood: "Dark" });
+  await owner.getByText("No saved item matches these viewers and the permitted time/mood tiers. Keep your inputs or adjust them explicitly.", { exact: true }).waitFor();
+  if (await owner.getByText("Tonight's pick", { exact: true }).count()) throw new Error("The picker showed a suggestion when no permitted match existed.");
+
+  console.log("PASS: two-way title sharing and contributor attribution, duplicate YouTube link consolidation, independent personal history, exact picker matches and exclusions, disclosed fallback tiers, movie and episode runtimes, and no-match behavior.");
 } catch (error) {
   failed = true;
   // Playwright errors can contain private invitation URLs or form values.
