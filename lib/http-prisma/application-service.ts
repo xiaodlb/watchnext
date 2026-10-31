@@ -166,12 +166,12 @@ export async function handlePrismaApplication(request: Request, path: string[]):
     match = /^library\/([^/]+)\/note$/.exec(key);
     if (match && (request.method === "PUT" || request.method === "DELETE")) { expected(body, c); if (!c.memberId) throw new AuthError("Choose a profile before changing this library."); if (request.method === "PUT" && typeof body.note !== "string") throw new AuthError("Enter a note."); await repo.patchPersonal(c.groupId, c.memberId, match[1], { note: request.method === "DELETE" ? null : body.note as string }, access(c)); return responseTitle(match[1], c); }
     if (key === "picker/inputs" && request.method === "GET") { const db = prismaIdentityClient(); const members: any[] = c.mode === "account" ? await db.member.findMany({ where: { groupId: c.groupId, accountMembership: { is: { status: "active" } } } }) : await db.member.findMany({ where: { groupId: c.groupId } }); return json({ groupId: c.groupId, mode: c.mode, viewers: members.map(memberDto), canAddTitle: true, context: contextDto(c) }); }
-    if (key === "picker/pick" && request.method === "POST") { expected(body, c); return picker(c, body); }
+    if (key === "picker/pick" && request.method === "POST") { expected(body, c); return await picker(c, body); }
     match = /^picker\/cycles\/([^/]+)\/next$/.exec(key);
     if (match && request.method === "POST") {
       expected(body, c); const cycle = pickerCycles.get(match[1]);
       if (!cycle || typeof body.step !== "string") throw new AuthError("This picking cycle expired or changed. Start again.");
-      return picker(c, cycle.input, { id: match[1], step: body.step });
+      return await picker(c, cycle.input, { id: match[1], step: body.step });
     }
     if (key === "metadata/search" && request.method === "POST") {
       expected(body, c); if (!c.memberId || typeof body.query !== "string" || !body.query.trim() || (body.source !== "youtube" && body.source !== "kinopoisk")) throw new AuthError("Enter a supported metadata search.");
