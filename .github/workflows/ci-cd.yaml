@@ -28,9 +28,22 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - name: Run backend and shared tests
-        run: pnpm exec vitest run --exclude 'tests/frontend/**'
+        # These files tested the deleted Next UI. See _docs/ci-test-scope.md.
+        run: |
+          pnpm exec vitest run --exclude 'tests/frontend/**' \
+            --exclude 'tests/contribution-controls.test.tsx' --exclude 'tests/create-group-form.test.tsx' \
+            --exclude 'tests/detail-view.test.tsx' --exclude 'tests/edit-form.test.tsx' \
+            --exclude 'tests/episode-controls.test.tsx' --exclude 'tests/home.test.tsx' \
+            --exclude 'tests/lookup-panel.test.tsx' --exclude 'tests/navigation.test.tsx' \
+            --exclude 'tests/note-controls.test.tsx' --exclude 'tests/profile-panel.test.tsx' \
+            --exclude 'tests/rating-controls.test.tsx' --exclude 'tests/title-form.test.tsx' \
+            --exclude 'tests/watch-controls.test.tsx' --exclude 'tests/watchlist-view.test.tsx' \
+            --exclude 'tests/accounts/form.test.tsx' --exclude 'tests/accounts/group-panel.test.tsx' \
+            --exclude 'tests/accounts/management-panel.test.tsx' --exclude 'tests/picker/picker.test.tsx'
       - name: Check TypeScript
         run: pnpm typecheck
+      - name: Check OCI deployment command handling
+        run: bash tests/oci-run-command.test.sh
 
   frontend-tests:
     name: Frontend tests
@@ -50,8 +63,15 @@ jobs:
         run: pnpm --dir lovable-frontend install --ignore-workspace --frozen-lockfile
       - name: Run Lovable UI tests
         run: pnpm --dir lovable-frontend test
-      - name: Run root frontend mock tests
-        run: pnpm test tests/frontend
+      - name: Run surviving frontend service tests
+        # The old mock UI and its isolation entry point were removed when Lovable became primary.
+        run: |
+          pnpm exec vitest run tests/frontend \
+            --exclude 'tests/frontend/accounts-ui.test.tsx' --exclude 'tests/frontend/entry-ui.test.tsx' \
+            --exclude 'tests/frontend/groups-ui.test.tsx' --exclude 'tests/frontend/http-entry-ui.test.tsx' \
+            --exclude 'tests/frontend/library-ui.test.tsx' --exclude 'tests/frontend/personal-ui.test.tsx' \
+            --exclude 'tests/frontend/picker-ui.test.tsx' --exclude 'tests/frontend/preview.test.tsx' \
+            --exclude 'tests/frontend/isolation.test.ts'
 
   build_and_publish:
     name: Build, test and publish ARM64 and AMD64 images

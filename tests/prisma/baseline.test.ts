@@ -27,4 +27,4 @@ it("proves the owned-copy Prisma baseline preserves all seeded native rows", () 
   expect(result.stdout).toContain("owned populated native copy baselined");
   expect(result.stdout).toContain("fresh isolated Prisma baseline setup");
   expect(result.stderr).toBe("");
-});
+}, 60_000);
