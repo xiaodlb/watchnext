@@ -4,10 +4,25 @@ umask 077
 
 readonly repo_dir=/opt/watchnext
 readonly repo_url=https://github.com/xiaodlb/watchnext.git
-readonly project=watchnext
 readonly deploy_user=ubuntu
 readonly image_repository=ghcr.io/xiaodlb/watchnext
-readonly compose_dir=/var/lib/watchnext/compose
+readonly deploy_config=/etc/watchnext/deploy.conf
+
+project=watchnext
+compose_dir=/var/lib/watchnext/compose
+if [[ -e "$deploy_config" ]]; then
+  if [[ ! -f "$deploy_config" || -L "$deploy_config" || "$(stat -c '%U:%G:%a' "$deploy_config")" != root:root:600 ]]; then
+    echo "Expected ${deploy_config} to be a root-owned mode 600 regular file." >&2
+    exit 1
+  fi
+  # The installer writes only these two key/value lines after validating the project name.
+  # shellcheck disable=SC1090
+  source "$deploy_config"
+fi
+if [[ ! "$project" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ || "$compose_dir" != "/var/lib/${project}/compose" ]]; then
+  echo 'Deployment project configuration is invalid.' >&2
+  exit 1
+fi
 
 tag="$(cat)"
 if [[ ! "$tag" =~ ^([0-9a-f]{40})-[0-9]+-[0-9]+$ ]]; then
