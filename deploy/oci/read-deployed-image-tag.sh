@@ -44,9 +44,14 @@ for attempt in $(seq 1 30); do
     instance-agent command-execution get \
     --command-id "$command_id" --instance-id "$DEV_OCI_INSTANCE_OCID" \
     --output json 2>/dev/null || true)"
-  state="$(jq --raw-output '.data.lifecycleState // empty' <<<"$result" 2>/dev/null || true)"
+  state="$(jq --raw-output '.data["lifecycle-state"] // empty' <<<"$result" 2>/dev/null || true)"
   case "$state" in
     SUCCEEDED)
+      exit_code="$(jq --raw-output '.data.content["exit-code"] // empty' <<<"$result")"
+      if [[ "$exit_code" != 0 ]]; then
+        echo "Dev image read command returned an invalid or nonzero exit code." >&2
+        exit 1
+      fi
       tag="$(jq --raw-output '.data.content.text // empty' <<<"$result" | tr -d '\r' | grep -E '^[0-9]{8}-[0-9]{6}-[0-9a-f]{7}$' | tail -n 1 || true)"
       if [[ ! "$tag" =~ ^[0-9]{8}-[0-9]{6}-[0-9a-f]{7}$ ]]; then
         echo 'Dev Run Command did not return a valid deployed image tag.' >&2

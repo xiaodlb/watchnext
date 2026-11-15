@@ -47,10 +47,10 @@ for attempt in $(seq 1 180); do
     instance-agent command-execution get \
     --command-id "$command_id" --instance-id "$OCI_INSTANCE_OCID" \
     --output json 2>/dev/null || true)"
-  state="$(jq --raw-output '.data.lifecycleState // empty' <<<"$result" 2>/dev/null || true)"
+  state="$(jq --raw-output '.data["lifecycle-state"] // empty' <<<"$result" 2>/dev/null || true)"
   case "$state" in
     SUCCEEDED)
-      exit_code="$(jq --raw-output '.data.content.exitCode // empty' <<<"$result")"
+      exit_code="$(jq --raw-output '.data.content["exit-code"] // empty' <<<"$result")"
       if [[ ! "$exit_code" =~ ^[0-9]+$ || "$exit_code" != 0 ]]; then
         echo "OCI Run Command reported exit code ${exit_code}." >&2
         exit 1
