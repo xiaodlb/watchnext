@@ -1,0 +1,10 @@
+services:
+  app:
+    environment:
+      OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://collector:4318/v1/metrics
+    networks: [default, telemetry]
+
+networks:
+  telemetry:
+    external: true
+    name: watchnext-telemetry
