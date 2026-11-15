@@ -2,6 +2,8 @@ services:
   app:
     environment:
       OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: http://collector:4318/v1/metrics
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://collector:4318/v1/traces
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: http://collector:4318/v1/logs
     networks: [default, telemetry]
 
 networks:

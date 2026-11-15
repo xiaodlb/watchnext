@@ -24,6 +24,21 @@ Grafana automatically provisions the Prometheus data source and the WatchNext da
 
 This setup connects dev on the same Docker host. A production VM is a separate host and cannot join this local Docker bridge. Connecting production requires a private, authenticated encrypted network path (for example a VPN or SSH tunnel) and corresponding collector binding; do not expose unauthenticated OTLP on the public internet. Until production and that network path exist, production cannot send metrics to this stack.
 
+## Traces, logs and alerts
+
+The separate stack also contains Tempo for traces, Loki for logs and Alertmanager for alerts. Grafana provisions all three data sources. The application overlay enables OTLP/HTTP traces, metrics and logs; the `/v1` backend emits deliberately sanitized completion/failure log records and trace spans. They contain a status code and service/environment/version resource attributes, never request paths, invitation tokens, content, credentials, or exception messages. Other framework logs and routes are not captured by this OTLP pipeline.
+
+Prometheus evaluates `alerts.yaml`: one warning fires when title creation failures increase over five minutes, and another fires when the collector cannot be scraped for two minutes. Alertmanager forwards alerts to the AI on-call service, which receives only bounded alert name, status, environment and version. The service calls the OpenAI Responses API and writes its analysis and safe diagnostic suggestions to its container log; it never executes commands or changes the application. It needs outbound access and a configured API key. The key is stored only in the server's private `observability/.env`, never in Git:
+
+```text
+OPENAI_API_KEY=<your-key>
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+Restart only the observability stack after adding these values. View the agent's responses with `sudo docker compose --env-file observability/.env -f observability/compose.yaml logs oncall`. If the key is missing or the API call fails, the agent returns an error and Alertmanager retries; no analysis is claimed. Usage of the external API may be billed by the provider. Alerts and responses are not delivered to email or a chat service by this configuration.
+
+Tempo retains traces for 24 hours; Loki is configured for seven days. This is an academic, single-host setup, not highly available storage. Take appropriate backups before replacing its named volumes.
+
 The Environment and Deployed version dropdowns filter all four panels. Active participants means active group memberships and legacy profiles, not people currently online. Title metrics cover `/v1` routes, as described in `_docs/opentelemetry.md`.
 
 The included `otel-collector.yaml` receives OTLP/HTTP metrics at port 4318 and exposes Prometheus metrics at port 9464. The collector config converts resource attributes to Prometheus labels `deployment_environment_name` and `service_version`. Prometheus scrapes `collector:9464` over the internal network.

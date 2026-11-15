@@ -5,6 +5,8 @@ import { SamplingDecision, type Sampler } from "@opentelemetry/sdk-trace-base";
 import { PeriodicExportingMetricReader } from "@opentelemetry/sdk-metrics";
 import { OTLPMetricExporter } from "@opentelemetry/exporter-metrics-otlp-http";
 import { metrics } from "@opentelemetry/api";
+import { BatchLogRecordProcessor } from "@opentelemetry/sdk-logs";
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 
 // Only our explicit, privacy-reviewed spans are sampled. Next framework spans
 // can include invitation URLs and must not be sent to an external collector.
@@ -26,7 +28,7 @@ export function telemetryResource(env: NodeJS.ProcessEnv = process.env) {
 let sdk: NodeSDK | undefined;
 export function startTelemetry() {
   // Explicit endpoint required: avoid unexpectedly exporting private traffic.
-  if (sdk || (!process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT && !process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT)) return;
+  if (sdk || (!process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT && !process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT && !process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT)) return;
   const metricReader = process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
     ? new PeriodicExportingMetricReader({ exporter: new OTLPMetricExporter() }) : undefined;
   sdk = new NodeSDK({
@@ -35,6 +37,7 @@ export function startTelemetry() {
     sampler: safeSampler,
     ...(process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ? { traceExporter: new OTLPTraceExporter() } : {}),
     ...(metricReader ? { metricReader } : {}),
+    ...(process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT ? { logRecordProcessors: [new BatchLogRecordProcessor(new OTLPLogExporter())] } : {}),
   });
   sdk.start();
   if (metricReader && process.env.WATCHNEXT_HTTP_REPOSITORY === "prisma") {

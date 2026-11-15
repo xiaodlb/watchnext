@@ -1,0 +1,19 @@
+groups:
+  - name: watchnext
+    rules:
+      - alert: WatchNextTitleCreationFailures
+        expr: sum by (deployment_environment_name, service_version) (increase(watchnext_titles_creation_failures_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Title creation failed in {{ $labels.deployment_environment_name }}"
+          description: "At least one title creation failed in five minutes. Check API status and metadata service connectivity."
+      - alert: WatchNextMetricsMissing
+        expr: up{job="watchnext-otel"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "WatchNext telemetry collector is unavailable"
+          description: "Prometheus cannot scrape the collector. Check its container and network."

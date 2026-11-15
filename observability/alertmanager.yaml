@@ -1,0 +1,11 @@
+route:
+  receiver: ai-oncall
+  group_by: [alertname, deployment_environment_name, service_version]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+receivers:
+  - name: ai-oncall
+    webhook_configs:
+      - url: http://oncall:8080/alerts
+        send_resolved: true
