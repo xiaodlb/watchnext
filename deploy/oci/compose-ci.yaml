@@ -1,7 +1,7 @@
 services:
   app:
     image: ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG:?Set WATCHNEXT_IMAGE_TAG}
-    platform: linux/arm64
+    platform: ${WATCHNEXT_TARGET_PLATFORM:-linux/arm64}
     build:
       labels:
         org.opencontainers.image.source: https://github.com/xiaodlb/watchnext

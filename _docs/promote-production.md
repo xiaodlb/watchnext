@@ -6,7 +6,7 @@ The workflow [`.github/workflows/promote-production.yaml`](../.github/workflows/
 YYYYMMDD-HHMMSS-shortsha
 ```
 
-The tag is created once in UTC by the dev **Build and publish** job, for example `20260818-163457-83242da`. Dev deploy pulls it from public GHCR, records only this non-secret tag in its root-owned Compose directory after a successful deployment, and leaves the record unchanged on failure. Promotion reads that record with a read-only OCI Run Command and then pulls that exact existing GHCR image to the production instance. This makes production promotion an image promotion, not a rebuild.
+The tag is created once in UTC by the dev **Build and publish** job, for example `20260818-163457-83242da`. It identifies a multi-architecture manifest containing separately built and tested ARM64 and AMD64 images from the same commit. Dev pulls the ARM64 image; AMD64 production pulls the matching image using the same tag. Dev records only this non-secret tag in its root-owned Compose directory after a successful deployment, and leaves the record unchanged on failure. Promotion reads that record with a read-only OCI Run Command and pulls that manifest on production without rebuilding. The architecture images have different digests; they share the same source revision and release tag.
 
 ## One-time production VM setup
 

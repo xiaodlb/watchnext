@@ -1,6 +1,6 @@
 # CI/CD to Oracle Cloud Always Free
 
-The GitHub Actions workflow runs the backend/shared and frontend suites in parallel. When both pass, its **Build and publish tested ARM64 image** job creates one `linux/arm64` image, runs the PostgreSQL migration, Compose readiness and Playwright two-session checks against it, then publishes that exact image to public GHCR on a successful `main` push. The tag uses UTC `YYYYMMDD-HHMMSS-shortsha`, for example `20260818-163457-83242da`; `latest` is never used. The separate **Deploy dev image from GHCR** job pulls the exact published tag and starts it with `--no-build`.
+The GitHub Actions workflow runs the backend/shared and frontend suites in parallel. When both pass, its **Build, test and publish ARM64 and AMD64 images** job builds each architecture from the same commit and runs the PostgreSQL migration, Compose readiness and Playwright two-session checks against each image. On a successful `main` push it publishes both tested images to GHCR and creates one shared multi-architecture tag only after both pass. ARM64 dev and AMD64 production pull their matching image using that same tag. The tag uses UTC `YYYYMMDD-HHMMSS-shortsha`, for example `20260818-163457-83242da`; `latest` is never used. The separate **Deploy dev image from GHCR** job pulls the published tag and starts it with `--no-build`.
 
 Deployment runs only on a successful push to `main`, only after all Compose checks pass, and only when the repository variable `OCI_DEPLOY_ENABLED` is exactly `true`. Pull requests never publish the image or deploy. Deployment uses GitHub's short-lived OIDC token, exchanges it for a short-lived OCI Resource Principal Session Token (RPST), and asks the OCI Instance Agent Run Command plugin to start a narrowly scoped deployment helper on the existing VM. The final step checks the public HTTPS `/health/readyz` endpoint. That route runs a database query and returns success only while the app can reach its configured database; `/v1/context` can return an anonymous response after a database error and is not a readiness check.
 
@@ -96,8 +96,8 @@ To disable deployment at any time, unset `OCI_DEPLOY_ENABLED` or change it to a 
 ## What the workflow verifies
 
 1. Backend/shared tests and frontend tests run in separate parallel jobs.
-2. Compose builds one ARM64 app image suitable for the Oracle A1 VM.
-3. The isolated PostgreSQL migration, readiness and Playwright multi-session scenarios all use that same image and clean up only their own resources.
+2. Compose builds ARM64 and AMD64 app images for the two OCI VM architectures.
+3. The isolated PostgreSQL migration, readiness and Playwright multi-session scenarios run against each built image and clean up only their own resources. ARM64 uses QEMU emulation on the GitHub runner.
 4. Only a passing `main` push publishes the unique image tag `ghcr.io/xiaodlb/watchnext:<timestamp>-<shortsha>`.
 5. When deployment is enabled, OCI Run Command deploys the same tested timestamp-and-short-SHA image tag while preserving the existing `.env` and Compose named volumes.
 6. GitHub Actions retries `https://<configured-origin>/health/readyz` and fails the workflow if the app cannot reach its database.

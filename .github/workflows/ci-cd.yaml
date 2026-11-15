@@ -54,10 +54,10 @@ jobs:
         run: pnpm test tests/frontend
 
   build_and_publish:
-    name: Build and publish tested ARM64 image
+    name: Build, test and publish ARM64 and AMD64 images
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests]
-    timeout-minutes: 60
+    timeout-minutes: 120
     outputs:
       image_tag: ${{ steps.image.outputs.tag }}
     permissions:
@@ -81,31 +81,43 @@ jobs:
         id: image
         shell: bash
         run: echo "tag=$(date -u +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
-      - name: Build the Compose app image for Oracle A1 ARM64
+      - name: Build and test both architecture images
         env:
           WATCHNEXT_IMAGE_TAG: ${{ steps.image.outputs.tag }}
         run: |
-          docker compose --project-name watchnext-ci \
-            -f docker-compose.yaml \
-            -f deploy/oci/compose-ci.yaml \
-            build app
-          docker image inspect "ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG}" \
-            --format '{{.Os}}/{{.Architecture}}' | grep -Fx 'linux/arm64'
-          echo "WATCHNEXT_E2E_IMAGE=ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG}" >> "$GITHUB_ENV"
-      - name: Run two-session Playwright journey against the built image
-        run: pnpm test:e2e:compose
-      - name: Run healthy and unhealthy Compose readiness checks
-        run: pnpm test:e2e:readiness
-      - name: Run PostgreSQL migration and persistence checks
-        run: pnpm test:e2e:migrations
-      - name: Publish the tested immutable image to GHCR
+          set -euo pipefail
+          release_tag="$WATCHNEXT_IMAGE_TAG"
+          for arch in amd64 arm64; do
+            export WATCHNEXT_TARGET_PLATFORM="linux/${arch}"
+            export WATCHNEXT_IMAGE_TAG="${release_tag}-${arch}"
+            export WATCHNEXT_E2E_IMAGE="ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG}"
+            docker compose --project-name watchnext-ci \
+              -f docker-compose.yaml -f deploy/oci/compose-ci.yaml build app
+            docker image inspect "$WATCHNEXT_E2E_IMAGE" \
+              --format '{{.Os}}/{{.Architecture}}' | grep -Fx "$WATCHNEXT_TARGET_PLATFORM"
+            pnpm test:e2e:compose
+            pnpm test:e2e:readiness
+            pnpm test:e2e:migrations
+          done
+      - name: Set up manifest builder
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/setup-buildx-action@v3
+      - name: Publish both tested images and their shared manifest to GHCR
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           WATCHNEXT_IMAGE_TAG: ${{ steps.image.outputs.tag }}
         run: |
+          set -euo pipefail
           echo "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          docker push "ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG}"
+          for arch in amd64 arm64; do
+            docker push "ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG}-${arch}"
+          done
+          docker buildx imagetools create \
+            --tag "ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG}" \
+            "ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG}-amd64" \
+            "ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG}-arm64"
+          docker buildx imagetools inspect "ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG}"
 
       - name: Record published dev image
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
