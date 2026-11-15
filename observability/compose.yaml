@@ -29,7 +29,7 @@ services:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./watchnext-dashboard.json:/var/lib/grafana/dashboards/watchnext.json:ro
-    networks: [internal]
+    networks: [internal, telemetry]
     restart: unless-stopped
 
 networks:
