@@ -2,6 +2,7 @@ allowBuilds:
   '@prisma/client': true
   '@prisma/engines': true
   prisma: true
+  protobufjs: false
 minimumReleaseAgeExclude:
   - '@asamuzakjp/dom-selector@10.0.3'
   - '@next/env@16.4.1'

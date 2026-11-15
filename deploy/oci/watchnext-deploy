@@ -81,8 +81,14 @@ compose=(docker compose --project-name "$project" --project-directory "$compose_
   -f "$compose_dir/deploy/oracle/docker-compose.yaml" \
   -f "$compose_dir/deploy/oci/compose-deploy.yaml")
 
-WATCHNEXT_IMAGE="$image" "${compose[@]}" config --quiet
-WATCHNEXT_IMAGE="$image" "${compose[@]}" pull app
-WATCHNEXT_IMAGE="$image" "${compose[@]}" up --detach --no-build --wait --wait-timeout 300
+export WATCHNEXT_IMAGE="$image" WATCHNEXT_DEPLOYED_VERSION="$tag"
+if [[ "$project" == "watchnext-production" ]]; then
+  export WATCHNEXT_ENVIRONMENT=production
+else
+  export WATCHNEXT_ENVIRONMENT=development
+fi
+"${compose[@]}" config --quiet
+"${compose[@]}" pull app
+"${compose[@]}" up --detach --no-build --wait --wait-timeout 300
 printf '%s\n' "$tag" | install -o root -g root -m 0644 /dev/stdin "$compose_dir/deployed-image-tag"
 echo "Deployed ${image}; the WatchNext PostgreSQL and Caddy named volumes were preserved."
