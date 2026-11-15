@@ -7,13 +7,8 @@ set +x
 : "${OCI_INSTANCE_OCID:?Set OCI_INSTANCE_OCID}"
 : "${WATCHNEXT_IMAGE_TAG:?Set WATCHNEXT_IMAGE_TAG}"
 
-if [[ ! "$WATCHNEXT_IMAGE_TAG" =~ ^([0-9a-f]{40})-[0-9]+-[0-9]+$ ]]; then
-  echo 'WATCHNEXT_IMAGE_TAG must contain a 40-character source SHA, GitHub run ID and attempt.' >&2
-  exit 2
-fi
-source_sha="${BASH_REMATCH[1]}"
-if [[ -n "${WATCHNEXT_SOURCE_SHA:-}" && "$WATCHNEXT_SOURCE_SHA" != "$source_sha" ]]; then
-  echo 'WATCHNEXT_SOURCE_SHA must match the SHA embedded in WATCHNEXT_IMAGE_TAG.' >&2
+if [[ ! "$WATCHNEXT_IMAGE_TAG" =~ ^[0-9]{8}-[0-9]{6}-[0-9a-f]{7}$ ]]; then
+  echo 'WATCHNEXT_IMAGE_TAG must use the UTC pattern YYYYMMDD-HHMMSS-shortsha.' >&2
   exit 2
 fi
 
@@ -39,7 +34,7 @@ command_id="$(oci --auth resource_principal --region "$OCI_REGION" \
   --content "file://${temp_dir}/content.json" \
   --target "file://${temp_dir}/target.json" \
   --timeout-in-seconds 1800 \
-  --display-name "WatchNext ${source_sha}" \
+  --display-name "WatchNext ${WATCHNEXT_IMAGE_TAG}" \
   --query data.id --raw-output)"
 if [[ -z "$command_id" || "$command_id" == "null" ]]; then
   echo 'OCI did not return a Run Command ID.' >&2

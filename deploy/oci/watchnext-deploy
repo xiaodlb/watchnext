@@ -25,11 +25,11 @@ if [[ ! "$project" =~ ^[a-z0-9][a-z0-9_-]{0,62}$ || "$compose_dir" != "/var/lib/
 fi
 
 tag="$(cat)"
-if [[ ! "$tag" =~ ^([0-9a-f]{40})-[0-9]+-[0-9]+$ ]]; then
-  echo 'Expected a commit SHA, GitHub run ID and attempt on standard input.' >&2
+if [[ ! "$tag" =~ ^[0-9]{8}-[0-9]{6}-([0-9a-f]{7})$ ]]; then
+  echo 'Expected an image tag using YYYYMMDD-HHMMSS-shortsha on standard input.' >&2
   exit 2
 fi
-sha="${BASH_REMATCH[1]}"
+short_sha="${BASH_REMATCH[1]}"
 
 if [[ ! -d "$repo_dir/.git" || ! -f "$repo_dir/.env" || -L "$repo_dir/.env" ]]; then
   echo 'Expected a Git checkout and a regular .env file in /opt/watchnext.' >&2
@@ -52,8 +52,8 @@ fi
 
 runuser --user "$deploy_user" -- env GIT_TERMINAL_PROMPT=0 \
   git -C "$repo_dir" fetch --quiet --no-tags "$repo_url" main
-if ! runuser --user "$deploy_user" -- git -C "$repo_dir" cat-file -e "${sha}^{commit}"; then
-  echo 'Fetched commit is unavailable in the WatchNext checkout.' >&2
+if ! sha="$(runuser --user "$deploy_user" -- git -C "$repo_dir" rev-parse --verify "${short_sha}^{commit}")"; then
+  echo 'The short SHA in the image tag does not resolve to a fetched main commit.' >&2
   exit 1
 fi
 
@@ -84,4 +84,5 @@ compose=(docker compose --project-name "$project" --project-directory "$compose_
 WATCHNEXT_IMAGE="$image" "${compose[@]}" config --quiet
 WATCHNEXT_IMAGE="$image" "${compose[@]}" pull app
 WATCHNEXT_IMAGE="$image" "${compose[@]}" up --detach --no-build --wait --wait-timeout 300
+printf '%s\n' "$tag" | install -o root -g root -m 0644 /dev/stdin "$compose_dir/deployed-image-tag"
 echo "Deployed ${image}; the WatchNext PostgreSQL and Caddy named volumes were preserved."

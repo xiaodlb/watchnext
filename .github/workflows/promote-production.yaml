@@ -2,15 +2,9 @@ name: Promote dev image to production
 
 on:
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Tested dev image tag: <40-character-SHA>-<CI-run-ID>-<attempt>"
-        required: true
-        type: string
 
 permissions:
   contents: read
-  actions: read
   id-token: write
 
 concurrency:
@@ -19,13 +13,12 @@ concurrency:
 
 jobs:
   promote:
-    name: Promote tested image
+    name: Promote currently deployed dev image
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 55
     environment: production
     env:
-      WATCHNEXT_IMAGE_TAG: ${{ inputs.image_tag }}
       OCI_REGION: ${{ vars.PRODUCTION_OCI_REGION }}
       OCI_IDENTITY_DOMAIN_URL: ${{ vars.PRODUCTION_OCI_IDENTITY_DOMAIN_URL }}
       OCI_OAUTH_CLIENT_ID: ${{ vars.PRODUCTION_OCI_OAUTH_CLIENT_ID }}
@@ -33,35 +26,11 @@ jobs:
       OCI_COMPARTMENT_OCID: ${{ vars.PRODUCTION_OCI_COMPARTMENT_OCID }}
       OCI_INSTANCE_OCID: ${{ vars.PRODUCTION_OCI_INSTANCE_OCID }}
       WATCHNEXT_APP_ORIGIN: ${{ vars.PRODUCTION_WATCHNEXT_APP_ORIGIN }}
+      DEV_OCI_REGION: ${{ vars.DEV_OCI_REGION }}
+      DEV_OCI_COMPARTMENT_OCID: ${{ vars.DEV_OCI_COMPARTMENT_OCID }}
+      DEV_OCI_INSTANCE_OCID: ${{ vars.DEV_OCI_INSTANCE_OCID }}
     steps:
       - uses: actions/checkout@v6
-
-      - name: Verify the selected dev image came from successful main CI
-        id: source
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ ! "$WATCHNEXT_IMAGE_TAG" =~ ^([0-9a-f]{40})-([0-9]+)-([0-9]+)$ ]]; then
-            echo 'image_tag must be <40-character-SHA>-<CI-run-ID>-<attempt>.' >&2
-            exit 2
-          fi
-          source_sha="${BASH_REMATCH[1]}"
-          source_run_id="${BASH_REMATCH[2]}"
-          source_attempt="${BASH_REMATCH[3]}"
-          run="$(curl --fail --silent --show-error \
-            --header "Authorization: Bearer ${GH_TOKEN}" \
-            --header 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${source_run_id}")"
-          [[ "$(jq -r '.head_sha' <<<"$run")" == "$source_sha" ]]
-          [[ "$(jq -r '.head_branch' <<<"$run")" == 'main' ]]
-          [[ "$(jq -r '.event' <<<"$run")" == 'push' ]]
-          [[ "$(jq -r '.path' <<<"$run")" == '.github/workflows/ci-cd.yaml' ]]
-          [[ "$(jq -r '.conclusion' <<<"$run")" == 'success' ]]
-          [[ "$(jq -r '.run_attempt' <<<"$run")" == "$source_attempt" ]]
-          echo "WATCHNEXT_SOURCE_SHA=${source_sha}" >> "$GITHUB_ENV"
-          echo "source_sha=${source_sha}" >> "$GITHUB_OUTPUT"
 
       - name: Validate production deployment configuration
         shell: bash
@@ -78,6 +47,12 @@ jobs:
           [[ "$OCI_REGION" =~ ^[a-z0-9-]+$ ]]
           [[ "$OCI_COMPARTMENT_OCID" == ocid1.compartment.* ]]
           [[ "$OCI_INSTANCE_OCID" == ocid1.instance.* ]]
+          : "${DEV_OCI_REGION:?Set production environment variable DEV_OCI_REGION}"
+          : "${DEV_OCI_COMPARTMENT_OCID:?Set production environment variable DEV_OCI_COMPARTMENT_OCID}"
+          : "${DEV_OCI_INSTANCE_OCID:?Set production environment variable DEV_OCI_INSTANCE_OCID}"
+          [[ "$DEV_OCI_REGION" =~ ^[a-z0-9-]+$ ]]
+          [[ "$DEV_OCI_COMPARTMENT_OCID" == ocid1.compartment.* ]]
+          [[ "$DEV_OCI_INSTANCE_OCID" == ocid1.instance.* ]]
 
       - name: Exchange GitHub OIDC token for a short-lived production OCI RPST
         env:
@@ -87,7 +62,10 @@ jobs:
       - name: Install OCI CLI
         run: pipx install 'oci-cli==3.95.1'
 
-      - name: Deploy the selected tested image to production
+      - name: Read the currently deployed dev image
+        run: bash deploy/oci/read-deployed-image-tag.sh
+
+      - name: Deploy the current dev image to production
         run: bash deploy/oci/submit-run-command.sh
 
       - name: Check production HTTPS readiness

@@ -1,6 +1,6 @@
 # CI/CD to Oracle Cloud Always Free
 
-The GitHub Actions workflow runs the backend/shared and frontend suites in parallel. When both pass, it builds the Compose app image for `linux/arm64`, then runs the existing PostgreSQL migration, Compose readiness and Playwright two-session checks against that exact image. A successful push to `main` publishes the tested image to GHCR with a tag containing the commit SHA, workflow run ID and run attempt. A new tag is used for every attempt so the image that was tested is the image deployed.
+The GitHub Actions workflow runs the backend/shared and frontend suites in parallel. When both pass, its **Build and publish tested ARM64 image** job creates one `linux/arm64` image, runs the PostgreSQL migration, Compose readiness and Playwright two-session checks against it, then publishes that exact image to public GHCR on a successful `main` push. The tag uses UTC `YYYYMMDD-HHMMSS-shortsha`, for example `20260818-163457-83242da`; `latest` is never used. The separate **Deploy dev image from GHCR** job pulls the exact published tag and starts it with `--no-build`.
 
 Deployment runs only on a successful push to `main`, only after all Compose checks pass, and only when the repository variable `OCI_DEPLOY_ENABLED` is exactly `true`. Pull requests never publish the image or deploy. Deployment uses GitHub's short-lived OIDC token, exchanges it for a short-lived OCI Resource Principal Session Token (RPST), and asks the OCI Instance Agent Run Command plugin to start a narrowly scoped deployment helper on the existing VM. The final step checks the public HTTPS `/health/readyz` endpoint. That route runs a database query and returns success only while the app can reach its configured database; `/v1/context` can return an anonymous response after a database error and is not a readiness check.
 
@@ -10,7 +10,7 @@ The VM must have the existing WatchNext checkout at `/opt/watchnext`, owned by t
 
 Compose always uses project name `watchnext`, so its PostgreSQL, Caddy data and Caddy configuration named volumes retain their existing names. It pulls and replaces only the `app` image. The PostgreSQL service is not recreated with a data-volume deletion command; do not run `docker compose down -v` as part of deployment.
 
-The image `ghcr.io/xiaodlb/watchnext:<commit-sha>-<run-id>-<attempt>` must be public because the VM pulls it without a registry credential. After the workflow publishes the first image, open the GitHub repository's Packages page and set the `watchnext` container package visibility to **Public**. The workflow uses the repository's `GITHUB_TOKEN` for publishing and stores no GHCR credential on the VM.
+The image `ghcr.io/xiaodlb/watchnext:<timestamp>-<shortsha>` must be public because the VM pulls it without a registry credential. After the workflow publishes the first image, open the GitHub repository's Packages page and set the `watchnext` container package visibility to **Public**. The workflow uses the repository's `GITHUB_TOKEN` for publishing and stores no GHCR credential on the VM.
 
 ## One-time VM setup
 
@@ -22,7 +22,7 @@ Install a root-owned helper and grant the `ocarun` service user permission to in
 sudo bash /opt/watchnext/deploy/oci/install-runcommand-helper.sh
 ```
 
-The helper accepts only a 40-character lowercase Git commit SHA on standard input, fetches the public repository, and deploys the matching SHA image. It retains the existing `.env`, never prints its values, uses a deployment lock, checks Compose configuration, and waits for the services to start. The Compose files and Caddy file come from the selected Git commit, not the possibly modified live checkout.
+The helper accepts only a UTC `YYYYMMDD-HHMMSS-shortsha` image tag on standard input, fetches `main`, resolves the short SHA to its commit, and deploys the matching GHCR image. It retains the existing `.env`, never prints its values, uses a deployment lock, checks Compose configuration, waits for the services to start, and records the deployed non-secret image tag only after success. The Compose files and Caddy file come from the resolved Git commit, not the possibly modified live checkout. Re-run the installer after this helper changes so the root-owned copy on the VM is refreshed.
 
 This script grants `ocarun` passwordless sudo for one root-owned executable at `/usr/local/sbin/watchnext-deploy`. It does not grant general sudo access. If the deployment helper's behavior changes in a later commit, reinstall the root-owned copy from SSH before relying on that change.
 
@@ -98,6 +98,6 @@ To disable deployment at any time, unset `OCI_DEPLOY_ENABLED` or change it to a 
 1. Backend/shared tests and frontend tests run in separate parallel jobs.
 2. Compose builds one ARM64 app image suitable for the Oracle A1 VM.
 3. The isolated PostgreSQL migration, readiness and Playwright multi-session scenarios all use that same image and clean up only their own resources.
-4. Only a passing `main` push publishes the unique image tag `ghcr.io/xiaodlb/watchnext:<commit-sha>-<run-id>-<attempt>`.
-5. When deployment is enabled, OCI Run Command deploys the same SHA tag while preserving the existing `.env` and Compose named volumes.
+4. Only a passing `main` push publishes the unique image tag `ghcr.io/xiaodlb/watchnext:<timestamp>-<shortsha>`.
+5. When deployment is enabled, OCI Run Command deploys the same tested timestamp-and-short-SHA image tag while preserving the existing `.env` and Compose named volumes.
 6. GitHub Actions retries `https://<configured-origin>/health/readyz` and fails the workflow if the app cannot reach its database.

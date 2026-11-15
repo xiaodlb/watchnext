@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/xiaodlb/watchnext:${GITHUB_SHA:-local}-${GITHUB_RUN_ID:-0}-${GITHUB_RUN_ATTEMPT:-0}
+    image: ghcr.io/xiaodlb/watchnext:${WATCHNEXT_IMAGE_TAG:?Set WATCHNEXT_IMAGE_TAG}
     platform: linux/arm64
     build:
       labels:
