@@ -18,3 +18,9 @@ coverage/
 generated/postgres-client/
 **/.watchnext-demo-owner.json
 **/.watchnext-demo-test-owner.json
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+!*.tfvars.example

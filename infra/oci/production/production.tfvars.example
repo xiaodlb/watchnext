@@ -1,0 +1,9 @@
+# Copy outside the repository as production.tfvars. Do not commit values from a real account.
+region         = "me-dubai-1"
+compartment_id = "ocid1.compartment.oc1..replace-me"
+admin_cidr     = "203.0.113.10/32"
+ssh_public_key = "ssh-ed25519 AAAA... replace-with-your-public-key"
+
+# Use a unique, random value of at least 24 characters. Set it with
+# TF_VAR_database_password instead of writing it to a tracked file.
+# database_password = ""
