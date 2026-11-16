@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { expect } from "playwright/test";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const project = `watchnext-e2e-${randomBytes(10).toString("hex")}`;
@@ -225,9 +226,9 @@ try {
     await page.getByText("Saved", { exact: true }).waitFor();
     await page.reload();
     await page.getByRole("heading", { name: movieTitle, exact: true }).waitFor();
-    if (await history.getByLabel("Stopped at (H:MM:SS)").inputValue() !== timestamp) throw new Error(`${memberName}'s saved progress did not persist after reload.`);
+    await expect(history.getByLabel("Stopped at (H:MM:SS)"), `${memberName}'s saved progress should persist after reload.`).toHaveValue(timestamp, { timeout: 15000 });
     if (await history.getByRole("radio", { name: String(rating), exact: true }).getAttribute("aria-checked") !== "true") throw new Error(`${memberName}'s saved rating did not persist after reload.`);
-    if (await history.getByLabel(/Your note/).inputValue() !== note) throw new Error(`${memberName}'s saved note did not persist after reload.`);
+    await expect(history.getByLabel(/Your note/), `${memberName}'s saved note should persist after reload.`).toHaveValue(note, { timeout: 15000 });
   }
 
   stage = "saving the owner's personal movie history";
@@ -240,7 +241,7 @@ try {
   stage = "checking group-visible notes and private progress for the owner";
   await owner.goto(`${origin}${moviePath}`);
   const ownerHistory = owner.locator("section").filter({ has: owner.getByRole("heading", { name: "Your progress", exact: true }) });
-  if (await ownerHistory.getByLabel("Stopped at (H:MM:SS)").inputValue() !== "0:12:34") throw new Error("The guest's progress replaced the owner's personal progress.");
+  await expect(ownerHistory.getByLabel("Stopped at (H:MM:SS)"), "The owner's progress should remain independent of the guest's.").toHaveValue("0:12:34", { timeout: 15000 });
   const ownerGroup = owner.locator("section").filter({ has: owner.getByRole("heading", { name: "From the group", exact: true }) });
   await ownerGroup.getByText(guestName, { exact: false }).waitFor();
   await ownerGroup.getByText("★ 8/10", { exact: true }).waitFor();
@@ -250,7 +251,7 @@ try {
   stage = "checking group-visible notes and private progress for the guest";
   await guest.goto(`${origin}${moviePath}`);
   const guestHistory = guest.locator("section").filter({ has: guest.getByRole("heading", { name: "Your progress", exact: true }) });
-  if (await guestHistory.getByLabel("Stopped at (H:MM:SS)").inputValue() !== "0:23:45") throw new Error("The owner's progress replaced the guest's personal progress.");
+  await expect(guestHistory.getByLabel("Stopped at (H:MM:SS)"), "The guest's progress should remain independent of the owner's.").toHaveValue("0:23:45", { timeout: 15000 });
   const guestGroup = guest.locator("section").filter({ has: guest.getByRole("heading", { name: "From the group", exact: true }) });
   await guestGroup.getByText(ownerName, { exact: false }).waitFor();
   await guestGroup.getByText("★ 4/10", { exact: true }).waitFor();
