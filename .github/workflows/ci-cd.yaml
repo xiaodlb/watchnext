@@ -176,7 +176,7 @@ jobs:
           [[ "$OCI_IDENTITY_DOMAIN_URL" =~ ^https://[^/]+/?$ ]]
           [[ "$WATCHNEXT_APP_ORIGIN" =~ ^https://[^/]+$ ]]
           [[ "$OCI_REGION" =~ ^[a-z0-9-]+$ ]]
-          [[ "$OCI_COMPARTMENT_OCID" == ocid1.compartment.* ]]
+          bash deploy/oci/validate-compartment-id.sh "$OCI_COMPARTMENT_OCID"
           [[ "$OCI_INSTANCE_OCID" == ocid1.instance.* ]]
           [[ "$WATCHNEXT_IMAGE_TAG" =~ ^[0-9]{8}-[0-9]{6}-[0-9a-f]{7}$ ]]
       - name: Exchange GitHub OIDC token for a short-lived OCI RPST

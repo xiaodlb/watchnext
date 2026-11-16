@@ -79,7 +79,7 @@ Add these **Actions variables** to the repository:
 | `OCI_REGION` | The VM's OCI region identifier, such as `me-dubai-1` |
 | `OCI_IDENTITY_DOMAIN_URL` | The Identity Domain base URL, for example `https://idcs-<region>.identity.oraclecloud.com` (no path) |
 | `OCI_OAUTH_CLIENT_ID` | OAuth client ID added to the Identity Propagation Trust |
-| `OCI_COMPARTMENT_OCID` | OCID of the compartment containing the VM and Run Command |
+| `OCI_COMPARTMENT_OCID` | OCID of the compartment containing the VM and Run Command; for the root compartment use its `ocid1.tenancy...` OCID |
 | `OCI_INSTANCE_OCID` | OCID of the WatchNext VM |
 | `WATCHNEXT_APP_ORIGIN` | Public HTTPS origin with no trailing slash, e.g. `https://watchnext.example.com` |
 

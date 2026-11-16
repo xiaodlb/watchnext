@@ -27,11 +27,11 @@ Create a GitHub repository environment called `production`. Add a required revie
 | `PRODUCTION_OCI_REGION` | Production VM region, for example `me-dubai-1` |
 | `PRODUCTION_OCI_IDENTITY_DOMAIN_URL` | Production Identity Domain base URL without a path |
 | `PRODUCTION_OCI_OAUTH_CLIENT_ID` | OAuth client ID for the production promotion trust |
-| `PRODUCTION_OCI_COMPARTMENT_OCID` | Compartment containing production Run Commands and VM |
+| `PRODUCTION_OCI_COMPARTMENT_OCID` | Compartment OCID containing production Run Commands and VM; use the tenancy OCID for root |
 | `PRODUCTION_OCI_INSTANCE_OCID` | Terraform output `production_instance_ocid` |
 | `PRODUCTION_WATCHNEXT_APP_ORIGIN` | Terraform output `production_https_origin` without a trailing slash |
 | `DEV_OCI_REGION` | Dev VM OCI region |
-| `DEV_OCI_COMPARTMENT_OCID` | Dev VM compartment OCID |
+| `DEV_OCI_COMPARTMENT_OCID` | Dev VM compartment OCID; use the tenancy OCID for root |
 | `DEV_OCI_INSTANCE_OCID` | Dev VM instance OCID |
 
 Store this **environment secret** only in `production`:

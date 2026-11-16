@@ -2,6 +2,10 @@
 # Exercises the scripts with representative OCI CLI output; never contacts OCI.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
+bash "$root/deploy/oci/validate-compartment-id.sh" 'ocid1.compartment.oc1..example'
+bash "$root/deploy/oci/validate-compartment-id.sh" 'ocid1.tenancy.oc1..example'
+if bash "$root/deploy/oci/validate-compartment-id.sh" 'ocid1.instance.oc1..example'; then echo 'Expected instance OCID rejection.' >&2; exit 1; fi
+if bash "$root/deploy/oci/validate-compartment-id.sh" 'ocid1.tenancy.'; then echo 'Expected incomplete OCID rejection.' >&2; exit 1; fi
 test_dir="$(mktemp -d "${TMPDIR:-/tmp}/watchnext-oci-test.XXXXXX")"
 trap 'rm -rf -- "$test_dir"' EXIT
 mkdir "$test_dir/bin"
