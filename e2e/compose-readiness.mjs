@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { waitForApp } from "./wait-for-app.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const tempBase = resolve(tmpdir());
@@ -106,6 +107,12 @@ try {
   const ready = postgres.State.Health.Log.find(entry => entry.ExitCode === 0);
   if (!ready || Date.parse(ready.End) > Date.parse(app.State.StartedAt)) throw new Error("PostgreSQL readiness was not observed before application start.");
   console.log("PASS: PostgreSQL became healthy before the application started.");
+  // The base Compose file has no app healthcheck: --wait confirms only that
+  // the process started. Its migration and Next.js startup may still be in
+  // progress, especially under ARM emulation. Wait for the actual DB-backed
+  // readiness endpoint before navigating with Chromium.
+  stage = "waiting for the application readiness endpoint";
+  await waitForApp(origin, { checkInterrupted });
   stage = "checking Chromium installation (run pnpm exec playwright install chromium if missing)";
   if (!existsSync(chromium.executablePath())) throw new Error("Chromium is missing.");
   stage = "checking the site and API";
@@ -113,9 +120,12 @@ try {
   const context = await browser.newContext({ serviceWorkers: "block" });
   await context.route("**/*", route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   const page = await context.newPage(); page.setDefaultTimeout(30000); page.setDefaultNavigationTimeout(30000);
+  stage = "checking the home page";
   const home = await page.goto(origin); if (!home?.ok()) throw new Error("Home page returned an error.");
   await page.getByRole("tab", { name: "Sign in", exact: true }).waitFor();
+  stage = "checking the context API";
   const api = await page.request.get(`${origin}/v1/context`, { timeout: 10000 }); if (!api.ok()) throw new Error("Context API returned an error.");
+  stage = "checking database readiness";
   const readiness = await page.request.get(`${origin}/health/readyz`, { timeout: 10000 });
   if (!readiness.ok() || (await readiness.json()).status !== "ok") throw new Error("Database readiness endpoint did not confirm readiness.");
   await context.close(); await browser.close(); browser = undefined;
