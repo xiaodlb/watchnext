@@ -12,7 +12,7 @@ sudo docker compose --env-file observability/.env -f observability/compose.yaml 
 sudo docker compose -p watchnext -f docker-compose.yaml -f deploy/oracle/docker-compose.yaml -f observability/app-telemetry.yaml up -d --no-build
 ```
 
-The second command recreates the app container to attach it to the telemetry network; PostgreSQL and Caddy volumes remain unchanged. It requires the app image to contain OpenTelemetry instrumentation. Existing dev deployments predating that code need an updated app image first. This network overlay is a separate application Compose configuration, and must also be included in every subsequent app deployment; the current OCI deployment helper does not include it automatically. Thus automatic deployments must not be enabled until the helper is updated to preserve this overlay.
+The second command recreates the app container to attach it to the telemetry network; PostgreSQL and Caddy volumes remain unchanged. It requires the app image to contain OpenTelemetry instrumentation. Existing dev deployments predating that code need an updated app image first. Reinstall the root-owned OCI deployment helper after updating `/opt/watchnext`: `sudo bash /opt/watchnext/deploy/oci/install-runcommand-helper.sh`. For the `watchnext` dev project, the updated helper detects the existing `watchnext-telemetry` network and includes the release's telemetry overlay on subsequent deployments. If that network exists but the release lacks the overlay, deployment fails rather than silently dropping telemetry. The `watchnext-production` project is never attached to this host-local network automatically.
 
 On the workstation, establish a tunnel and open `http://127.0.0.1:13000`:
 

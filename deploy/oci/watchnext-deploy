@@ -81,6 +81,18 @@ compose=(docker compose --project-name "$project" --project-directory "$compose_
   -f "$compose_dir/deploy/oracle/docker-compose.yaml" \
   -f "$compose_dir/deploy/oci/compose-deploy.yaml")
 
+# Preserve the local collector connection on the dev host. Never attach the
+# production project to a host-local dev network just because it exists.
+if [[ "$project" == "watchnext" ]] && docker network inspect watchnext-telemetry >/dev/null 2>&1; then
+  if [[ ! -f "$release_dir/observability/app-telemetry.yaml" ]]; then
+    echo 'Dev telemetry network exists but this release has no telemetry overlay.' >&2
+    exit 1
+  fi
+  install -d -o root -g root -m 0755 "$compose_dir/observability"
+  install -o root -g root -m 0644 "$release_dir/observability/app-telemetry.yaml" "$compose_dir/observability/app-telemetry.yaml"
+  compose+=(-f "$compose_dir/observability/app-telemetry.yaml")
+fi
+
 export WATCHNEXT_IMAGE="$image" WATCHNEXT_DEPLOYED_VERSION="$tag"
 if [[ "$project" == "watchnext-production" ]]; then
   export WATCHNEXT_ENVIRONMENT=production
